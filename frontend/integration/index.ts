@@ -17,21 +17,37 @@ export const useGetCanisterId = () => {
 
   const { enqueueSnackbar } = useSnackbar();
 
-  return useQuery("canister-id", () => backend.canisterId(), {
+  return useQuery("canister-id", () => backend.canister_id(), {
     onError: () => {
-      enqueueSnackbar("Failed to fetch canister id", { variant: "error" });
+      enqueueSnackbar("Failed to fetch the canister ID", { variant: "error" });
     },
   });
 };
 
-export const useGetCanisterInfo = () => {
+export const useGetCanisterChanges = () => {
   const { backend } = useHistoryBackend();
 
   const { enqueueSnackbar } = useSnackbar();
 
-  return useQuery("canister-info", () => backend.canisterInfo(), {
+  return useQuery("canister-changes", () => backend.canister_changes(), {
     onError: () => {
-      enqueueSnackbar("Failed to fetch canister info", { variant: "error" });
+      enqueueSnackbar("Failed to fetch the canister changes", {
+        variant: "error",
+      });
+    },
+  });
+};
+
+export const useGetCanisterState = () => {
+  const { backend } = useHistoryBackend();
+
+  const { enqueueSnackbar } = useSnackbar();
+
+  return useQuery("canister-state", () => backend.canister_state(), {
+    onError: () => {
+      enqueueSnackbar("Failed to fetch the canister state", {
+        variant: "error",
+      });
     },
   });
 };

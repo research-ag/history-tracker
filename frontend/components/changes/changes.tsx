@@ -1,15 +1,15 @@
 import { parseISO, format } from "date-fns";
-import { Box, LinearProgress, Table, Typography } from "@mui/joy";
+import { Box, Divider, LinearProgress, Table, Typography } from "@mui/joy";
 import { SHA256, enc } from "crypto-js";
 
 import PageTemplate from "@fe/components/page-template";
-import { useGetCanisterInfo } from "@fe/integration";
+import { useGetCanisterChanges } from "@fe/integration";
 import { CanisterChange } from "@declarations/history_be/history_be.did";
 
 import ItemWithDetails from "./item-with-details";
 
 const Changes = () => {
-  const { data, isLoading } = useGetCanisterInfo();
+  const { data, isLoading } = useGetCanisterChanges();
 
   const renderAction = (change: CanisterChange): React.ReactNode => {
     if ("creation" in change.details)
@@ -171,10 +171,32 @@ const Changes = () => {
           "Something went wrong"
         ) : (
           <>
-            <Typography level="body-sm">
-              Total records: {Number(data.total_num_changes)}
-            </Typography>
-
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <Typography level="body-sm">
+                Total records: {Number(data.total_num_changes)}
+              </Typography>
+              <Divider orientation="vertical" />
+              <Typography level="body-sm">
+                Tracked records: {data.changes.length}
+              </Typography>
+              <Divider orientation="vertical" />
+              <Typography level="body-sm">
+                History integrity:{" "}
+                {(
+                  (data.changes.length / Number(data.total_num_changes)) *
+                  100
+                ).toFixed(2)}
+                %
+              </Typography>
+              <Divider orientation="vertical" />
+              <Typography level="body-sm">
+                Latest sync:{" "}
+                {format(
+                  new Date(Number(data.timestamp_nanos) / 1_000_000),
+                  "MMM dd, yyyy HH:mm"
+                )}
+              </Typography>
+            </Box>
             <Table sx={{ "& tr": { height: "45px" } }}>
               <colgroup>
                 <col style={{ width: "100px" }} />
@@ -192,7 +214,7 @@ const Changes = () => {
                 </tr>
               </thead>
               <tbody>
-                {[...data.recent_changes].reverse().map((change) => {
+                {[...data.changes].reverse().map((change) => {
                   return (
                     <tr key={change.timestamp_nanos}>
                       <td>{Number(change.canister_version)}</td>

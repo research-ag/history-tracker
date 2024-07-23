@@ -9,7 +9,7 @@ import Root from "@fe/components/root";
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: false },
+    queries: { retry: false, staleTime: Infinity },
     mutations: { retry: false },
   },
 });

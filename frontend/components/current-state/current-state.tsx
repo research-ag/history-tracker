@@ -1,15 +1,15 @@
-import { parseISO, format } from "date-fns";
+import { format } from "date-fns";
 import { SHA256, enc } from "crypto-js";
-import { Box, LinearProgress } from "@mui/joy";
+import { Box, LinearProgress, Typography } from "@mui/joy";
 
-import { useGetCanisterInfo } from "@fe/integration";
+import { useGetCanisterState } from "@fe/integration";
 import PageTemplate from "@fe/components/page-template";
-import { CanisterInfoResponse } from "@declarations/history_be/history_be.did";
+import { CanisterStateResponse } from "@declarations/history_be/history_be.did";
 
 const CurrentState = () => {
-  const { data, isLoading } = useGetCanisterInfo();
+  const { data, isLoading } = useGetCanisterState();
 
-  const getModuleHash = (data: CanisterInfoResponse) => {
+  const getModuleHash = (data: CanisterStateResponse) => {
     const hash = SHA256(data.module_hash.join(","));
     return hash.toString(enc.Hex);
   };
@@ -22,15 +22,15 @@ const CurrentState = () => {
         "Something went wrong"
       ) : (
         <Box>
+          <Typography sx={{ marginBottom: 1 }} level="body-sm">
+            Latest sync:{" "}
+            {format(
+              new Date(Number(data.timestamp_nanos) / 1_000_000),
+              "MMM dd, yyyy HH:mm"
+            )}
+          </Typography>
           <Box sx={{ marginBottom: 1 }}>
-            <Box
-              sx={{
-                display: "inline",
-                fontWeight: 600,
-              }}
-            >
-              Module hash:
-            </Box>{" "}
+            <Box sx={{ fontWeight: 600 }}>Module hash:</Box>{" "}
             {getModuleHash(data)}
           </Box>
           <Box>
