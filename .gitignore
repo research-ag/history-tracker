@@ -1,0 +1,15 @@
+.dfx
+.mops
+.tmp
+.vessel/
+.vscode/
+.DS_Store
+*.wasm
+./dfx.json
+package-set.dhall
+vessel.dhall
+node_modules
+declarations
+canister_ids.json
+dist
+.env

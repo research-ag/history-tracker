@@ -1,0 +1,31 @@
+{
+  "canisters": {
+    "history_be": {
+      "main": "./src/main.mo",
+      "type": "motoko",
+      "init_arg": "(principal \"be2us-64aaa-aaaaa-qaabq-cai\")",
+      "declarations": {
+        "bindings": ["js", "ts"],
+        "output": "./declarations/history_be"
+      }
+    },
+    "history_fe": {
+      "type": "assets",
+      "dependencies": ["history_be"],
+      "source": ["dist/"],
+      "build": "npm run build:frontend",
+      "declarations": {
+        "output": "./declarations/history_fe"
+      }
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": "mops sources"
+    }
+  },
+  "dfx": "0.20.1",
+  "version": 1,
+  "output_env_file": ".env"
+}
