@@ -182,19 +182,22 @@ const Changes = () => {
               <Divider orientation="vertical" />
               <Typography level="body-sm">
                 History integrity:{" "}
-                {(
-                  (data.changes.length / Number(data.total_num_changes)) *
-                  100
-                ).toFixed(2)}
-                %
+                {data.total_num_changes > 0
+                  ? `${(
+                      (data.changes.length / Number(data.total_num_changes)) *
+                      100
+                    ).toFixed(2)}%`
+                  : "N/A"}
               </Typography>
               <Divider orientation="vertical" />
               <Typography level="body-sm">
                 Latest sync:{" "}
-                {format(
-                  new Date(Number(data.timestamp_nanos) / 1_000_000),
-                  "MMM dd, yyyy HH:mm"
-                )}
+                {data.timestamp_nanos > 0
+                  ? format(
+                      new Date(Number(data.timestamp_nanos) / 1_000_000),
+                      "MMM dd, yyyy HH:mm"
+                    )
+                  : "N/A"}
               </Typography>
             </Box>
             <Table sx={{ "& tr": { height: "45px" } }}>

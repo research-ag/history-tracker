@@ -24,10 +24,12 @@ const CurrentState = () => {
         <Box>
           <Typography sx={{ marginBottom: 1 }} level="body-sm">
             Latest sync:{" "}
-            {format(
-              new Date(Number(data.timestamp_nanos) / 1_000_000),
-              "MMM dd, yyyy HH:mm"
-            )}
+            {data.timestamp_nanos > 0
+              ? format(
+                  new Date(Number(data.timestamp_nanos) / 1_000_000),
+                  "MMM dd, yyyy HH:mm"
+                )
+              : "N/A"}
           </Typography>
           <Box sx={{ marginBottom: 1 }}>
             <Box sx={{ fontWeight: 600 }}>Module hash:</Box>{" "}
