@@ -3,7 +3,7 @@
   "name": "history_fe",
   "version": "1.0.0",
   "main": "index.js",
-  "repository": "https://github.com/research-ag/canister-history.git",
+  "repository": "https://github.com/research-ag/history-tracker.git",
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
