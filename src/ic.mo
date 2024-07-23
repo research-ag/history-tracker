@@ -2,7 +2,7 @@ import Principal "mo:base/Principal";
 import Nat64 "mo:base/Nat64";
 
 module {
-  type CanisterChange = {
+  public type CanisterChange = {
     timestamp_nanos : Nat64;
     canister_version : Nat64;
     origin : CanisterChangeOrigin;
