@@ -24,7 +24,7 @@ const App = () => {
             ul: {
               margin: "0",
               padding: "0",
-              paddingLeft: "10px",
+              paddingLeft: "16px",
             },
           }}
         />

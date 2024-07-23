@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Box, Tabs, TabList, Tab } from "@mui/joy";
 
 import Changes from "@fe/components/changes";
+import CurrentState from "@fe/components/current-state";
 import ThemeButton from "@fe/components/theme-button";
 import { useGetCanisterId } from "@fe/integration";
 
@@ -58,11 +59,12 @@ const Root = () => {
         >
           <TabList sx={{ flexGrow: 1 }} variant="plain">
             <Tab color="neutral">Canister changes</Tab>
-            {/* <Tab color="neutral">Current state</Tab> */}
+            <Tab color="neutral">Current state</Tab>
           </TabList>
           <ThemeButton sx={{ marginLeft: 1 }} />
         </Box>
         {tabValue === 0 && <Changes />}
+        {tabValue === 1 && <CurrentState />}
       </Tabs>
     </Box>
   );
