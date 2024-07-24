@@ -16,6 +16,7 @@ module {
     var module_hash : ?[Nat8]; // current module hash
     var controllers : [Principal]; // current controllers
     var timestamp_nanos : Nat64; // latest sync timestamp
+    var sync_version : Nat; // sync version (nubmer of syncs)
   };
 
   public type StableData = {
@@ -25,6 +26,7 @@ module {
     module_hash : ?[Nat8];
     controllers : [Principal];
     timestamp_nanos : Nat64;
+    sync_version : Nat;
     // * for remembering associated canister id
     canister_id : Principal;
   };
@@ -33,12 +35,14 @@ module {
     changes : [IC.CanisterChange];
     total_num_changes : Nat64;
     timestamp_nanos : Nat64;
+    sync_version : Nat;
   };
 
   public type CanisterStateResponse = {
     module_hash : ?[Nat8];
     controllers : [Principal];
     timestamp_nanos : Nat64;
+    sync_version : Nat;
   };
 
   public func fromStableData(data : StableData) : CanisterHistory {
@@ -56,6 +60,7 @@ module {
       var module_hash = null;
       var controllers = [];
       var timestamp_nanos = 0;
+      var sync_version = 0;
     };
 
     let ic = actor "aaaaa-aa" : IC.Management;
@@ -84,6 +89,7 @@ module {
       internal_state.module_hash := info.module_hash;
       internal_state.controllers := info.controllers;
       internal_state.timestamp_nanos := Prim.time();
+      internal_state.sync_version += 1;
 
       sync_ongoing := false;
     };
@@ -96,6 +102,7 @@ module {
         changes = _;
         total_num_changes = internal_state.total_num_changes;
         timestamp_nanos = internal_state.timestamp_nanos;
+        sync_version = internal_state.sync_version;
       };
     };
 
@@ -104,6 +111,7 @@ module {
         module_hash = internal_state.module_hash;
         controllers = internal_state.controllers;
         timestamp_nanos = internal_state.timestamp_nanos;
+        sync_version = internal_state.sync_version;
       };
     };
 
@@ -116,6 +124,7 @@ module {
         module_hash = _.module_hash;
         controllers = _.controllers;
         timestamp_nanos = _.timestamp_nanos;
+        sync_version = _.sync_version;
         canister_id;
       };
     };
@@ -127,6 +136,7 @@ module {
       internal_state.module_hash := data.module_hash;
       internal_state.controllers := data.controllers;
       internal_state.timestamp_nanos := data.timestamp_nanos;
+      internal_state.sync_version := data.sync_version;
     };
   };
 };
