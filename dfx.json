@@ -3,7 +3,6 @@
     "history_be": {
       "main": "./src/main.mo",
       "type": "motoko",
-      "init_arg": "(principal \"be2us-64aaa-aaaaa-qaabq-cai\")",
       "declarations": {
         "bindings": ["js", "ts"],
         "output": "./declarations/history_be"
