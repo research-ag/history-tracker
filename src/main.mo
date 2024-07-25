@@ -40,6 +40,10 @@ actor class HistoryTracker() = self {
 
   stable var stable_data : StableData = (convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
 
+  public func is_canister_tracked(canister_id : Principal) : async Bool {
+    history_storage_map.get(canister_id) != null;
+  };
+
   public func track(canister_id : Principal) : async () {
     if (history_storage_map.get(canister_id) != null) throw Error.reject("The canister is already tracked.");
     let new_canister_history = CanisterHistory.CanisterHistory(canister_id);

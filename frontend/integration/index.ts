@@ -1,6 +1,6 @@
-import { useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "react-query";
+import { useQuery } from "react-query";
 import { useSnackbar } from "notistack";
+import { Principal } from "@dfinity/principal";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
@@ -12,42 +12,46 @@ export const useHistoryBackend = () => {
   return { backend };
 };
 
-export const useGetCanisterId = () => {
+export const useGetIsCanisterTracked = (
+  canisterId: Principal,
+  enabled: boolean
+) => {
   const { backend } = useHistoryBackend();
-
-  const { enqueueSnackbar } = useSnackbar();
-
-  return useQuery("canister-id", () => backend.canister_id(), {
-    onError: () => {
-      enqueueSnackbar("Failed to fetch the canister ID", { variant: "error" });
-    },
-  });
+  return useQuery(
+    ["is-canister-tracked", canisterId.toString()],
+    () => backend.is_canister_tracked(canisterId),
+    { enabled }
+  );
 };
 
-export const useGetCanisterChanges = () => {
+export const useGetCanisterChanges = (canisterId: Principal) => {
   const { backend } = useHistoryBackend();
-
   const { enqueueSnackbar } = useSnackbar();
-
-  return useQuery("canister-changes", () => backend.canister_changes(), {
-    onError: () => {
-      enqueueSnackbar("Failed to fetch the canister changes", {
-        variant: "error",
-      });
-    },
-  });
+  return useQuery(
+    ["canister-changes", canisterId.toString()],
+    () => backend.canister_changes(canisterId),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the canister changes", {
+          variant: "error",
+        });
+      },
+    }
+  );
 };
 
-export const useGetCanisterState = () => {
+export const useGetCanisterState = (canisterId: Principal) => {
   const { backend } = useHistoryBackend();
-
   const { enqueueSnackbar } = useSnackbar();
-
-  return useQuery("canister-state", () => backend.canister_state(), {
-    onError: () => {
-      enqueueSnackbar("Failed to fetch the canister state", {
-        variant: "error",
-      });
-    },
-  });
+  return useQuery(
+    ["canister-state", canisterId.toString()],
+    () => backend.canister_state(canisterId),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the canister state", {
+          variant: "error",
+        });
+      },
+    }
+  );
 };

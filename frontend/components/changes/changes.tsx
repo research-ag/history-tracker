@@ -1,4 +1,6 @@
+import { useParams } from "react-router-dom";
 import { parseISO, format } from "date-fns";
+import { Principal } from "@dfinity/principal";
 import { Box, Divider, LinearProgress, Table, Typography } from "@mui/joy";
 import { SHA256, enc } from "crypto-js";
 
@@ -9,7 +11,13 @@ import { CanisterChange } from "@declarations/history_be/history_be.did";
 import ItemWithDetails from "./item-with-details";
 
 const Changes = () => {
-  const { data, isLoading } = useGetCanisterChanges();
+  const { canisterId } = useParams();
+
+  const { data, isLoading } = useGetCanisterChanges(
+    Principal.fromText(canisterId!)
+  );
+
+  const isCorrupted = !!data?.corruption_timestamp?.[0];
 
   const renderAction = (change: CanisterChange): React.ReactNode => {
     if ("creation" in change.details)
@@ -172,16 +180,24 @@ const Changes = () => {
         ) : (
           <>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography level="body-sm">
+              <Typography
+                sx={{ fontWeight: 600, textTransform: "uppercase" }}
+                level="body-xs"
+                color={isCorrupted ? "danger" : "success"}
+              >
+                {isCorrupted ? "Corrupted" : "Not corrupted"}
+              </Typography>
+              <Divider orientation="vertical" />
+              <Typography level="body-xs">
                 Total records: {Number(data.total_num_changes)}
               </Typography>
               <Divider orientation="vertical" />
-              <Typography level="body-sm">
+              <Typography level="body-xs">
                 Tracked records: {data.changes.length}
               </Typography>
               <Divider orientation="vertical" />
-              <Typography level="body-sm">
-                History integrity:{" "}
+              <Typography level="body-xs">
+                History completeness:{" "}
                 {data.total_num_changes > 0
                   ? `${(
                       (data.changes.length / Number(data.total_num_changes)) *
@@ -190,7 +206,7 @@ const Changes = () => {
                   : "N/A"}
               </Typography>
               <Divider orientation="vertical" />
-              <Typography level="body-sm">
+              <Typography level="body-xs">
                 Latest sync:{" "}
                 {data.timestamp_nanos > 0
                   ? format(
