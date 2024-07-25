@@ -1,13 +1,17 @@
 import { Sheet, Box, Typography, Tooltip } from "@mui/joy";
 import InfoIcon from "@mui/icons-material/Info";
 
-interface PageTemplateProps {
+interface DashboardPageLayoutProps {
   children: React.ReactNode;
   title: string;
   noteTooltip?: React.ReactNode;
 }
 
-const PageTemplate = ({ children, title, noteTooltip }: PageTemplateProps) => {
+const DashboardPageLayout = ({
+  children,
+  title,
+  noteTooltip,
+}: DashboardPageLayoutProps) => {
   return (
     <Sheet
       sx={{
@@ -34,4 +38,4 @@ const PageTemplate = ({ children, title, noteTooltip }: PageTemplateProps) => {
   );
 };
 
-export default PageTemplate;
+export default DashboardPageLayout;

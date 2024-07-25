@@ -5,7 +5,7 @@ import { SHA256, enc } from "crypto-js";
 import { Box, LinearProgress, Typography } from "@mui/joy";
 
 import { useGetCanisterState } from "@fe/integration";
-import PageTemplate from "@fe/components/page-template";
+import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { CanisterStateResponse } from "@declarations/history_be/history_be.did";
 
 const CurrentState = () => {
@@ -23,7 +23,7 @@ const CurrentState = () => {
   };
 
   return (
-    <PageTemplate title="State">
+    <DashboardPageLayout title="State">
       {isLoading ? (
         <LinearProgress sx={{ marginY: 1 }} />
       ) : !data ? (
@@ -64,7 +64,7 @@ const CurrentState = () => {
           </Box>
         </Box>
       )}
-    </PageTemplate>
+    </DashboardPageLayout>
   );
 };
 

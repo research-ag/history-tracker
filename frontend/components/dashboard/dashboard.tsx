@@ -7,6 +7,7 @@ import Changes from "@fe/components/changes";
 import CurrentState from "@fe/components/current-state";
 import ThemeButton from "@fe/components/theme-button";
 import { useGetIsCanisterTracked } from "@fe/integration";
+import ErrorLayout from "@fe/components/error-layout";
 
 import InfoItem from "./info-item";
 
@@ -34,11 +35,11 @@ const Dashboard = () => {
   }
 
   if (!isCanisterIdValid) {
-    return "The canister ID is not valid.";
+    return <ErrorLayout message="The canister ID is not valid." />;
   }
 
   if (!isCanisterTracked) {
-    return "The canister is not tracked.";
+    return <ErrorLayout message="The canister is not tracked." />;
   }
 
   return (

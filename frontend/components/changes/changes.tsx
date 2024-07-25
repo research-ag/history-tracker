@@ -4,7 +4,7 @@ import { Principal } from "@dfinity/principal";
 import { Box, Divider, LinearProgress, Table, Typography } from "@mui/joy";
 import { SHA256, enc } from "crypto-js";
 
-import PageTemplate from "@fe/components/page-template";
+import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { useGetCanisterChanges } from "@fe/integration";
 import { CanisterChange } from "@declarations/history_be/history_be.did";
 
@@ -152,7 +152,7 @@ const Changes = () => {
   };
 
   return (
-    <PageTemplate
+    <DashboardPageLayout
       title="Changelog"
       noteTooltip={
         <Box sx={{ width: "400px" }}>
@@ -253,7 +253,7 @@ const Changes = () => {
           </>
         )}
       </Box>
-    </PageTemplate>
+    </DashboardPageLayout>
   );
 };
 
