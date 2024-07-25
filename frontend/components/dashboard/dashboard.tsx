@@ -7,6 +7,7 @@ import Changes from "@fe/components/changes";
 import CurrentState from "@fe/components/current-state";
 import ThemeButton from "@fe/components/theme-button";
 import { useGetIsCanisterTracked } from "@fe/integration";
+import LoadingPage from "@fe/components/loading-page";
 import ErrorLayout from "@fe/components/error-layout";
 
 import InfoItem from "./info-item";
@@ -31,7 +32,7 @@ const Dashboard = () => {
     useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
 
   if (isCanisterTrackedLoading) {
-    return "Loading...";
+    return <LoadingPage />;
   }
 
   if (!isCanisterIdValid) {
