@@ -6,6 +6,7 @@ import {
   useRouteError,
 } from "react-router-dom";
 
+import Home from "@fe/components/home";
 import Dashboard from "@fe/components/dashboard";
 import ErrorLayout from "@fe/components/error-layout";
 
@@ -22,7 +23,7 @@ const RootBoundary = () => {
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route path="/" errorElement={<RootBoundary />}>
-      <Route index element={<div>Index</div>} />
+      <Route index element={<Home />} />
       <Route path="dashboard/:canisterId" element={<Dashboard />} />
     </Route>
   )

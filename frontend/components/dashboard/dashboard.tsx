@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { Box, Tabs, TabList, Tab } from "@mui/joy";
+import { Box, Tabs, TabList, Tab, Button } from "@mui/joy";
+import HomeIcon from "@mui/icons-material/Home";
 
 import Changes from "@fe/components/changes";
 import CurrentState from "@fe/components/current-state";
@@ -85,6 +86,16 @@ const Dashboard = () => {
             <Tab color="neutral">Canister changes</Tab>
             <Tab color="neutral">Current state</Tab>
           </TabList>
+          <Link to="/">
+            <Button
+              sx={{ marginLeft: 1 }}
+              variant="solid"
+              color="primary"
+              startDecorator={<HomeIcon />}
+            >
+              Home
+            </Button>
+          </Link>
           <ThemeButton sx={{ marginLeft: 1 }} />
         </Box>
         {tabValue === 0 && <Changes />}

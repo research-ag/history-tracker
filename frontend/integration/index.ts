@@ -1,4 +1,4 @@
-import { useQuery } from "react-query";
+import { useMutation, useQuery } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
 
@@ -22,6 +22,23 @@ export const useGetIsCanisterTracked = (
     () => backend.is_canister_tracked(canisterId),
     { enabled }
   );
+};
+
+export const useTrack = () => {
+  const { backend } = useHistoryBackend();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation((canisterId: Principal) => backend.track(canisterId), {
+    onSuccess: () => {
+      enqueueSnackbar("The canister has been successfully registered", {
+        variant: "success",
+      });
+    },
+    onError: () => {
+      enqueueSnackbar("Failed to register the canister", {
+        variant: "error",
+      });
+    },
+  });
 };
 
 export const useGetCanisterChanges = (canisterId: Principal) => {
