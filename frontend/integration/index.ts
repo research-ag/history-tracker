@@ -20,7 +20,7 @@ export const useGetIsCanisterTracked = (
   return useQuery(
     ["is-canister-tracked", canisterId.toString()],
     () => backend.is_canister_tracked(canisterId),
-    { enabled }
+    { enabled, staleTime: 0 }
   );
 };
 

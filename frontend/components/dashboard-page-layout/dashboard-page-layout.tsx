@@ -4,12 +4,14 @@ import InfoIcon from "@mui/icons-material/Info";
 interface DashboardPageLayoutProps {
   children: React.ReactNode;
   title: string;
+  rightPart?: React.ReactNode;
   noteTooltip?: React.ReactNode;
 }
 
 const DashboardPageLayout = ({
   children,
   title,
+  rightPart,
   noteTooltip,
 }: DashboardPageLayoutProps) => {
   return (
@@ -32,6 +34,7 @@ const DashboardPageLayout = ({
             <InfoIcon sx={{ marginLeft: 2 }} />
           </Tooltip>
         )}
+        <Box sx={{ marginLeft: "auto" }}>{rightPart}</Box>
       </Box>
       {children}
     </Sheet>

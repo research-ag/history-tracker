@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { parseISO, format } from "date-fns";
 import { Principal } from "@dfinity/principal";
@@ -25,8 +26,6 @@ const Changes = () => {
   const { data, isLoading } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
-
-  const isCorrupted = !!data?.corruption_timestamp?.[0];
 
   const renderAction = (change: ExtendedChange): React.ReactNode => {
     if ("creation" in change.details)
@@ -189,9 +188,104 @@ const Changes = () => {
     return changesWithGaps;
   };
 
+  const numberOfResets = useMemo(
+    () =>
+      (data?.changes ?? []).reduce<number>((acc, change) => {
+        if ("code_deployment" in change.details) {
+          const { mode } = change.details.code_deployment;
+          if ("reinstall" in mode) return acc + 1;
+          if ("install" in mode && Number(change.canister_version) !== 1)
+            return acc + 1;
+        }
+        return acc;
+      }, 0),
+    []
+  );
+
+  const gapsExist = (changes: Array<ExtendedChange>) => {
+    if (changes.length < 2) return false;
+    for (let i = 1; i < changes.length; i++) {
+      const prev = changes[i - 1];
+      const cur = changes[i];
+      let delta = Number(cur.change_index) - Number(prev.change_index);
+      if (delta !== 1) return true;
+    }
+    return false;
+  };
+
+  const getSummarySinceCreation = (
+    changes: Array<ExtendedChange> // sorted by ascending indexes
+  ): "complete" | "incomplete" | "gaps" => {
+    if (gapsExist(changes)) return "gaps";
+    if (Number(changes[0].canister_version) !== 0) return "incomplete";
+    return "complete";
+  };
+
+  const getSummarySinceLastReset = (
+    changes_: Array<ExtendedChange> // sorted by ascending indexes
+  ): "complete" | "incomplete" | "gaps" => {
+    var changes: Array<ExtendedChange> = [...changes_];
+
+    if (numberOfResets === 0) return getSummarySinceCreation(changes);
+
+    let baseIndex = changes.findLastIndex((change) => {
+      if ("code_deployment" in change.details) {
+        const { mode } = change.details.code_deployment;
+        return (
+          "reinstall" in mode ||
+          ("install" in mode && Number(change.canister_version) !== 1)
+        );
+      }
+      return false;
+    });
+
+    // if the base change (install/reinstall) is tracked
+    if (baseIndex !== -1) {
+      changes = changes.slice(baseIndex);
+    }
+
+    if (gapsExist(changes)) return "gaps";
+    if (baseIndex === -1) return "incomplete";
+    return "complete";
+  };
+
+  const mapSummary = (summary: "complete" | "incomplete" | "gaps") => (
+    <Typography
+      sx={{ display: "inline", fontWeight: 600 }}
+      {...(summary === "complete" && { color: "success" })}
+      {...(summary === "incomplete" && { color: "warning" })}
+      {...(summary === "gaps" && { color: "danger" })}
+    >
+      {summary}
+    </Typography>
+  );
+
   return (
     <DashboardPageLayout
       title="Changelog"
+      rightPart={
+        data && (
+          <Box>
+            <Typography level="body-sm">
+              Since creation:{" "}
+              {mapSummary(getSummarySinceCreation(data.changes))}
+            </Typography>
+            <Typography level="body-sm">
+              Since last reset:{" "}
+              {mapSummary(getSummarySinceLastReset(data.changes))}
+            </Typography>
+            <Typography level="body-sm">
+              Number of resets:{" "}
+              <Typography
+                sx={{ display: "inline", fontWeight: 600 }}
+                color={numberOfResets === 0 ? "success" : "warning"}
+              >
+                {numberOfResets}
+              </Typography>
+            </Typography>
+          </Box>
+        )
+      }
       noteTooltip={
         <Box sx={{ width: "400px" }}>
           <Box sx={{ marginBottom: 1 }}>
@@ -218,14 +312,6 @@ const Changes = () => {
         ) : (
           <>
             <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography
-                sx={{ fontWeight: 600, textTransform: "uppercase" }}
-                level="body-xs"
-                color={isCorrupted ? "danger" : "success"}
-              >
-                {isCorrupted ? "Corrupted" : "Not corrupted"}
-              </Typography>
-              <Divider orientation="vertical" />
               <Typography level="body-xs">
                 Total records: {Number(data.total_num_changes)}
               </Typography>
@@ -246,12 +332,10 @@ const Changes = () => {
               <Divider orientation="vertical" />
               <Typography level="body-xs">
                 Latest sync:{" "}
-                {data.timestamp_nanos > 0
-                  ? format(
-                      new Date(Number(data.timestamp_nanos) / 1_000_000),
-                      "MMM dd, yyyy HH:mm"
-                    )
-                  : "N/A"}
+                {format(
+                  new Date(Number(data.timestamp_nanos) / 1_000_000),
+                  "MMM dd, yyyy HH:mm"
+                )}
               </Typography>
             </Box>
             <Table sx={{ "& tr": { height: "45px" } }}>

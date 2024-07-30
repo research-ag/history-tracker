@@ -15,8 +15,6 @@ const CurrentState = () => {
     Principal.fromText(canisterId!)
   );
 
-  const isCorrupted = !!data?.corruption_timestamp?.[0];
-
   const getModuleHash = (data: CanisterStateResponse) => {
     const hash = SHA256(data.module_hash.join(","));
     return hash.toString(enc.Hex);
@@ -39,15 +37,6 @@ const CurrentState = () => {
                 )
               : "N/A"}
           </Typography>
-          <Box sx={{ marginBottom: 1 }}>
-            <Box sx={{ fontWeight: 600 }}>Corruption status:</Box>{" "}
-            {isCorrupted
-              ? `Corrupted (detected at ${format(
-                  new Date(Number(data!.corruption_timestamp![0]) / 1_000_000),
-                  "MMM dd, yyyy HH:mm"
-                )})`
-              : "Not corrupted"}
-          </Box>
           <Box sx={{ marginBottom: 1 }}>
             <Box sx={{ fontWeight: 600 }}>Module hash:</Box>{" "}
             {getModuleHash(data)}
