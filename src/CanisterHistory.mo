@@ -81,24 +81,22 @@ module {
         num_requested_changes = ?Nat64.fromNat(20);
       });
 
-      var ctr = 1;
+      let changes_size = info.recent_changes.size();
+      var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
 
       // Merge untracked changes with already saved ones
       for (change in Iter.fromArray(info.recent_changes)) {
         if (change.timestamp_nanos > internal_state.latest_change_timestamp) {
-          let changes_size = info.recent_changes.size();
-          let change_index : Nat = (Nat64.toNat(info.total_num_changes) - changes_size) + ctr;
           internal_state.changes.put(
-            change_index,
+            cur_change_index,
             {
               change with
-              change_index;
+              change_index = cur_change_index;
             },
           );
           internal_state.latest_change_timestamp := change.timestamp_nanos;
         };
-
-        ctr += 1;
+        cur_change_index += 1;
       };
 
       internal_state.total_num_changes := info.total_num_changes;
