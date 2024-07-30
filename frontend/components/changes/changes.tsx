@@ -1,16 +1,25 @@
 import { useParams } from "react-router-dom";
 import { parseISO, format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Box, Divider, LinearProgress, Table, Typography } from "@mui/joy";
+import {
+  Box,
+  Divider,
+  LinearProgress,
+  Table,
+  Typography,
+  useTheme,
+} from "@mui/joy";
 import { SHA256, enc } from "crypto-js";
 
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { useGetCanisterChanges } from "@fe/integration";
-import { CanisterChange } from "@declarations/history_be/history_be.did";
+import { ExtendedChange } from "@declarations/history_be/history_be.did";
 
 import ItemWithDetails from "./item-with-details";
 
 const Changes = () => {
+  const theme = useTheme();
+
   const { canisterId } = useParams();
 
   const { data, isLoading } = useGetCanisterChanges(
@@ -19,7 +28,7 @@ const Changes = () => {
 
   const isCorrupted = !!data?.corruption_timestamp?.[0];
 
-  const renderAction = (change: CanisterChange): React.ReactNode => {
+  const renderAction = (change: ExtendedChange): React.ReactNode => {
     if ("creation" in change.details)
       return (
         <ItemWithDetails
@@ -95,7 +104,7 @@ const Changes = () => {
     if ("code_uninstall" in change.details) return "Code uninstall";
   };
 
-  const renderOrigin = (change: CanisterChange): React.ReactNode => {
+  const renderOrigin = (change: ExtendedChange): React.ReactNode => {
     if ("from_user" in change.origin)
       return (
         <ItemWithDetails
@@ -149,6 +158,35 @@ const Changes = () => {
           }
         />
       );
+  };
+
+  const addGaps = (
+    changes: Array<ExtendedChange>
+  ): Array<ExtendedChange | number> => {
+    if (changes.length < 2) {
+      return changes;
+    }
+
+    let changesWithGaps: Array<ExtendedChange | number> = [];
+
+    changesWithGaps.push(changes[0]);
+
+    for (let i = 1; i < changes.length; i++) {
+      const prev = changes[i - 1];
+      const cur = changes[i];
+
+      let delta = Math.abs(
+        Number(cur.change_index) - Number(prev.change_index)
+      );
+
+      if (delta !== 1) {
+        changesWithGaps.push(delta - 1);
+      }
+
+      changesWithGaps.push(cur);
+    }
+
+    return changesWithGaps;
   };
 
   return (
@@ -218,6 +256,7 @@ const Changes = () => {
             </Box>
             <Table sx={{ "& tr": { height: "45px" } }}>
               <colgroup>
+                <col style={{ width: "80px" }} />
                 <col style={{ width: "100px" }} />
                 <col />
                 <col />
@@ -226,6 +265,7 @@ const Changes = () => {
 
               <thead>
                 <tr>
+                  <th>Index</th>
                   <th>Version</th>
                   <th>Action</th>
                   <th>Origin</th>
@@ -233,9 +273,46 @@ const Changes = () => {
                 </tr>
               </thead>
               <tbody>
-                {[...data.changes].reverse().map((change) => {
+                {addGaps([...data.changes].reverse()).map((change, i) => {
+                  if (typeof change == "number") {
+                    return (
+                      <tr
+                        style={{ background: theme.palette.warning[50] }}
+                        key={i}
+                      >
+                        <td colSpan={5}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 2,
+                            }}
+                          >
+                            <Typography
+                              sx={{ display: "inline", fontWeight: 600 }}
+                              color="warning"
+                            >
+                              WARNING
+                            </Typography>
+                            <Typography>
+                              Gap of{" "}
+                              <Typography
+                                sx={{ display: "inline", fontWeight: 600 }}
+                              >
+                                {change}
+                              </Typography>{" "}
+                              change
+                              {change > 1 ? "s" : ""}
+                            </Typography>
+                          </Box>
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return (
                     <tr key={change.timestamp_nanos}>
+                      <td>{Number(change.change_index)}</td>
                       <td>{Number(change.canister_version)}</td>
                       <td>{renderAction(change)}</td>
                       <td>{renderOrigin(change)}</td>
