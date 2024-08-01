@@ -1,22 +1,17 @@
-import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { parseISO, format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import {
-  Box,
-  Divider,
-  LinearProgress,
-  Table,
-  Typography,
-  useTheme,
-} from "@mui/joy";
-import { SHA256, enc } from "crypto-js";
+import { Box, LinearProgress, Table, useTheme } from "@mui/joy";
 
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { useGetCanisterChanges } from "@fe/integration";
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
 
-import ItemWithDetails from "./item-with-details";
+import HistorySummarySection from "./history-summary-section";
+import HistoryInfoLine from "./history-info-line";
+import GapsRowContent from "./gap-row-content";
+import ActionCell from "./action-cell";
+import OriginCell from "./origin-cell";
+import { addGaps } from "./utils";
 
 const Changes = () => {
   const theme = useTheme();
@@ -27,265 +22,10 @@ const Changes = () => {
     Principal.fromText(canisterId!)
   );
 
-  const renderAction = (change: ExtendedChange): React.ReactNode => {
-    if ("creation" in change.details)
-      return (
-        <ItemWithDetails
-          title="Creation"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
-              <Box component="ul">
-                {change.details.creation.controllers.map((c, i) => (
-                  <Box key={i} component="li">
-                    {c.toText()}
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          }
-        />
-      );
-    if ("code_deployment" in change.details) {
-      const codeDeploymentRecord = change.details.code_deployment;
-      const getMode = () => {
-        if ("reinstall" in codeDeploymentRecord.mode) return "Reinstall";
-        if ("upgrade" in codeDeploymentRecord.mode) return "Upgrade";
-        if ("install" in codeDeploymentRecord.mode) return "Install";
-      };
-      const getModuleHash = () => {
-        const hash = SHA256(codeDeploymentRecord.module_hash.join(","));
-        return hash.toString(enc.Hex);
-      };
-      return (
-        <ItemWithDetails
-          title="Code deployment"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box>
-                <Box sx={{ display: "inline", fontWeight: 600 }}>Mode:</Box>{" "}
-                {getMode()}
-              </Box>
-              <Box>
-                <Box
-                  sx={{
-                    display: "inline",
-                    fontWeight: 600,
-                  }}
-                >
-                  Module hash:
-                </Box>{" "}
-                {getModuleHash()}
-              </Box>
-            </Box>
-          }
-        />
-      );
-    }
-    if ("controllers_change" in change.details)
-      return (
-        <ItemWithDetails
-          title="Controllers change"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
-              <Box component="ul">
-                {change.details.controllers_change.controllers.map((c, i) => (
-                  <Box key={i} component="li">
-                    {c.toText()}
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          }
-        />
-      );
-    if ("code_uninstall" in change.details) return "Code uninstall";
-  };
-
-  const renderOrigin = (change: ExtendedChange): React.ReactNode => {
-    if ("from_user" in change.origin)
-      return (
-        <ItemWithDetails
-          title="From user"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box
-                sx={{
-                  display: "inline",
-                  fontWeight: 600,
-                }}
-              >
-                Principal:
-              </Box>{" "}
-              {change.origin.from_user.user_id.toString()}
-            </Box>
-          }
-        />
-      );
-    if ("from_canister" in change.origin)
-      return (
-        <ItemWithDetails
-          title="From canister"
-          details={
-            <Box>
-              <Box sx={{ overflowWrap: "break-word" }}>
-                <Box
-                  sx={{
-                    display: "inline",
-                    fontWeight: 600,
-                  }}
-                >
-                  Canister ID:
-                </Box>{" "}
-                {change.origin.from_canister.canister_id.toString()}
-              </Box>
-              <Box sx={{ overflowWrap: "break-word" }}>
-                <Box
-                  sx={{
-                    display: "inline",
-                    fontWeight: 600,
-                  }}
-                >
-                  Canister version:
-                </Box>{" "}
-                {change.origin.from_canister.canister_version.length
-                  ? Number(change.origin.from_canister.canister_version[0])
-                  : "N/A"}
-              </Box>
-            </Box>
-          }
-        />
-      );
-  };
-
-  const addGaps = (
-    changes: Array<ExtendedChange>
-  ): Array<ExtendedChange | number> => {
-    if (changes.length < 2) {
-      return changes;
-    }
-
-    let changesWithGaps: Array<ExtendedChange | number> = [];
-
-    changesWithGaps.push(changes[0]);
-
-    for (let i = 1; i < changes.length; i++) {
-      const prev = changes[i - 1];
-      const cur = changes[i];
-
-      let delta = Math.abs(
-        Number(cur.change_index) - Number(prev.change_index)
-      );
-
-      if (delta !== 1) {
-        changesWithGaps.push(delta - 1);
-      }
-
-      changesWithGaps.push(cur);
-    }
-
-    return changesWithGaps;
-  };
-
-  const numberOfResets = useMemo(
-    () =>
-      (data?.changes ?? []).reduce<number>((acc, change) => {
-        if ("code_deployment" in change.details) {
-          const { mode } = change.details.code_deployment;
-          if ("reinstall" in mode) return acc + 1;
-          if ("install" in mode && Number(change.canister_version) !== 1)
-            return acc + 1;
-        }
-        return acc;
-      }, 0),
-    []
-  );
-
-  const gapsExist = (changes: Array<ExtendedChange>) => {
-    if (changes.length < 2) return false;
-    for (let i = 1; i < changes.length; i++) {
-      const prev = changes[i - 1];
-      const cur = changes[i];
-      let delta = Number(cur.change_index) - Number(prev.change_index);
-      if (delta !== 1) return true;
-    }
-    return false;
-  };
-
-  const getSummarySinceCreation = (
-    changes: Array<ExtendedChange> // sorted by ascending indexes
-  ): "complete" | "incomplete" | "gaps" => {
-    if (gapsExist(changes)) return "gaps";
-    if (Number(changes[0].canister_version) !== 0) return "incomplete";
-    return "complete";
-  };
-
-  const getSummarySinceLastReset = (
-    changes_: Array<ExtendedChange> // sorted by ascending indexes
-  ): "complete" | "incomplete" | "gaps" => {
-    var changes: Array<ExtendedChange> = [...changes_];
-
-    if (numberOfResets === 0) return getSummarySinceCreation(changes);
-
-    let baseIndex = changes.findLastIndex((change) => {
-      if ("code_deployment" in change.details) {
-        const { mode } = change.details.code_deployment;
-        return (
-          "reinstall" in mode ||
-          ("install" in mode && Number(change.canister_version) !== 1)
-        );
-      }
-      return false;
-    });
-
-    // if the base change (install/reinstall) is tracked
-    if (baseIndex !== -1) {
-      changes = changes.slice(baseIndex);
-    }
-
-    if (gapsExist(changes)) return "gaps";
-    if (baseIndex === -1) return "incomplete";
-    return "complete";
-  };
-
-  const mapSummary = (summary: "complete" | "incomplete" | "gaps") => (
-    <Typography
-      sx={{ display: "inline", fontWeight: 600 }}
-      {...(summary === "complete" && { color: "success" })}
-      {...(summary === "incomplete" && { color: "warning" })}
-      {...(summary === "gaps" && { color: "danger" })}
-    >
-      {summary}
-    </Typography>
-  );
-
   return (
     <DashboardPageLayout
       title="Changelog"
-      rightPart={
-        data && (
-          <Box>
-            <Typography level="body-sm">
-              Since creation:{" "}
-              {mapSummary(getSummarySinceCreation(data.changes))}
-            </Typography>
-            <Typography level="body-sm">
-              Since last reset:{" "}
-              {mapSummary(getSummarySinceLastReset(data.changes))}
-            </Typography>
-            <Typography level="body-sm">
-              Number of resets:{" "}
-              <Typography
-                sx={{ display: "inline", fontWeight: 600 }}
-                color={numberOfResets === 0 ? "success" : "warning"}
-              >
-                {numberOfResets}
-              </Typography>
-            </Typography>
-          </Box>
-        )
-      }
+      rightPart={<HistorySummarySection changes={data?.changes} />}
       noteTooltip={
         <Box sx={{ width: "400px" }}>
           <Box sx={{ marginBottom: 1 }}>
@@ -311,33 +51,7 @@ const Changes = () => {
           "Something went wrong"
         ) : (
           <>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography level="body-xs">
-                Total records: {Number(data.total_num_changes)}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                Tracked records: {data.changes.length}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                History completeness:{" "}
-                {data.total_num_changes > 0
-                  ? `${(
-                      (data.changes.length / Number(data.total_num_changes)) *
-                      100
-                    ).toFixed(2)}%`
-                  : "N/A"}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                Latest sync:{" "}
-                {format(
-                  new Date(Number(data.timestamp_nanos) / 1_000_000),
-                  "MMM dd, yyyy HH:mm"
-                )}
-              </Typography>
-            </Box>
+            <HistoryInfoLine data={data} />
             <Table sx={{ "& tr": { height: "45px" } }}>
               <colgroup>
                 <col style={{ width: "80px" }} />
@@ -357,58 +71,39 @@ const Changes = () => {
                 </tr>
               </thead>
               <tbody>
-                {addGaps([...data.changes].reverse()).map((change, i) => {
-                  if (typeof change == "number") {
+                {addGaps(data.changes)
+                  .reverse()
+                  .map((change, i) => {
+                    if (typeof change == "number") {
+                      return (
+                        <tr
+                          style={{ background: theme.palette.warning[50] }}
+                          key={i}
+                        >
+                          <td colSpan={5}>
+                            <GapsRowContent gaps={change} />
+                          </td>
+                        </tr>
+                      );
+                    }
+
                     return (
-                      <tr
-                        style={{ background: theme.palette.warning[50] }}
-                        key={i}
-                      >
-                        <td colSpan={5}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 2,
-                            }}
-                          >
-                            <Typography
-                              sx={{ display: "inline", fontWeight: 600 }}
-                              color="warning"
-                            >
-                              WARNING
-                            </Typography>
-                            <Typography>
-                              Gap of{" "}
-                              <Typography
-                                sx={{ display: "inline", fontWeight: 600 }}
-                              >
-                                {change}
-                              </Typography>{" "}
-                              change
-                              {change > 1 ? "s" : ""}
-                            </Typography>
-                          </Box>
+                      <tr key={change.timestamp_nanos}>
+                        <td>{Number(change.change_index)}</td>
+                        <td>{Number(change.canister_version)}</td>
+                        <td>{<ActionCell change={change} />}</td>
+                        <td>{<OriginCell change={change} />}</td>
+                        <td>
+                          {format(
+                            new Date(
+                              Number(change.timestamp_nanos) / 1_000_000
+                            ),
+                            "MMM dd, yyyy HH:mm"
+                          )}
                         </td>
                       </tr>
                     );
-                  }
-
-                  return (
-                    <tr key={change.timestamp_nanos}>
-                      <td>{Number(change.change_index)}</td>
-                      <td>{Number(change.canister_version)}</td>
-                      <td>{renderAction(change)}</td>
-                      <td>{renderOrigin(change)}</td>
-                      <td>
-                        {format(
-                          new Date(Number(change.timestamp_nanos) / 1_000_000),
-                          "MMM dd, yyyy HH:mm"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                  })}
               </tbody>
             </Table>
           </>
