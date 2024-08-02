@@ -1,13 +1,14 @@
-import { ArrowDownward, ArrowUpward } from "@mui/icons-material";
-import { Box, IconButton } from "@mui/joy";
 import React, { useState } from "react";
+import { ArrowDownward, ArrowUpward } from "@mui/icons-material";
+import { Box, IconButton, Tooltip, Typography } from "@mui/joy";
 
 interface ItemWithDetailsProps {
   title: string;
+  hash?: string;
   details: React.ReactNode | null;
 }
 
-const ItemWithDetails = ({ title, details }: ItemWithDetailsProps) => {
+const ItemWithDetails = ({ title, hash, details }: ItemWithDetailsProps) => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -18,7 +19,14 @@ const ItemWithDetails = ({ title, details }: ItemWithDetailsProps) => {
             {open ? <ArrowUpward /> : <ArrowDownward />}
           </IconButton>
         )}
-        {title}
+        {title}{" "}
+        {hash && (
+          <Tooltip title={hash}>
+            <Typography sx={{ display: "inline" }}>
+              ({hash.slice(0, 7)})
+            </Typography>
+          </Tooltip>
+        )}
       </Box>
       {open && <Box sx={{ marginTop: 0.5 }}>{details}</Box>}
     </Box>

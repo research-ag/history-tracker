@@ -35,19 +35,15 @@ const ActionCell = ({ change }: ActionCellProps) => {
       if ("upgrade" in codeDeploymentRecord.mode) return "Upgrade";
       if ("install" in codeDeploymentRecord.mode) return "Install";
     };
-    const getModuleHash = () => {
-      const hash = SHA256(codeDeploymentRecord.module_hash.join(","));
-      return hash.toString(enc.Hex);
-    };
+    const moduleHash = SHA256(
+      codeDeploymentRecord.module_hash.join(",")
+    ).toString(enc.Hex);
     return (
       <ItemWithDetails
-        title="Code deployment"
+        title={getMode()!}
+        hash={moduleHash}
         details={
           <Box sx={{ overflowWrap: "break-word" }}>
-            <Box>
-              <Box sx={{ display: "inline", fontWeight: 600 }}>Mode:</Box>{" "}
-              {getMode()}
-            </Box>
             <Box>
               <Box
                 sx={{
@@ -57,7 +53,7 @@ const ActionCell = ({ change }: ActionCellProps) => {
               >
                 Module hash:
               </Box>{" "}
-              {getModuleHash()}
+              {moduleHash}
             </Box>
           </Box>
         }
