@@ -21,7 +21,7 @@ const ItemWithDetails = ({ title, hash, details }: ItemWithDetailsProps) => {
         )}
         {title}{" "}
         {hash && (
-          <Tooltip title={hash}>
+          <Tooltip title={<Box sx={{ width: "240px" }}>{hash}</Box>}>
             <Typography sx={{ display: "inline" }}>
               ({hash.slice(0, 7)})
             </Typography>
