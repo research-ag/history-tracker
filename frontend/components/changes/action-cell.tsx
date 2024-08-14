@@ -1,7 +1,8 @@
 import { Box } from "@mui/joy";
-import { SHA256, enc } from "crypto-js";
 
 import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { mapModuleHash } from "@fe/constants/knownHashes";
+import { getSHA256Hash } from "@fe/utils/hash";
 
 import ItemWithDetails from "./item-with-details";
 
@@ -35,9 +36,7 @@ const ActionCell = ({ change }: ActionCellProps) => {
       if ("upgrade" in codeDeploymentRecord.mode) return "Upgrade";
       if ("install" in codeDeploymentRecord.mode) return "Install";
     };
-    const moduleHash = SHA256(
-      codeDeploymentRecord.module_hash.join(",")
-    ).toString(enc.Hex);
+    const moduleHash = getSHA256Hash(codeDeploymentRecord.module_hash);
     return (
       <ItemWithDetails
         title={getMode()!}
@@ -55,6 +54,19 @@ const ActionCell = ({ change }: ActionCellProps) => {
               </Box>{" "}
               {moduleHash}
             </Box>
+            {mapModuleHash(moduleHash) && (
+              <Box>
+                <Box
+                  sx={{
+                    display: "inline",
+                    fontWeight: 600,
+                  }}
+                >
+                  Module hash is known:
+                </Box>{" "}
+                {mapModuleHash(moduleHash)}
+              </Box>
+            )}
           </Box>
         }
       />
