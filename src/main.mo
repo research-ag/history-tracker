@@ -74,6 +74,26 @@ actor class HistoryTracker() = self {
     };
   };
 
+  public func metadata(canister_id : Principal) : async CanisterHistory.SharedCanisterMetadata {
+    switch (history_storage_map.get(canister_id)) {
+      case (null) throw Error.reject("The canister is not tracked.");
+      case (?index) {
+        let history = history_storage.get(index);
+        history.metadata();
+      };
+    };
+  };
+
+  public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async () {
+    switch (history_storage_map.get(canister_id)) {
+      case (null) throw Error.reject("The canister is not tracked.");
+      case (?index) {
+        let history = history_storage.get(index);
+        await* history.update_metadata(caller, name, description);
+      };
+    };
+  };
+
   func trigger_sync() : async* () {
     var ctr = 0;
     let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
