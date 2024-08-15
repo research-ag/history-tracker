@@ -33,5 +33,5 @@ export const mapModuleHash = (hash: string) => {
     return `wallet canister ${walletMap[hash].join(", ")}`;
   }
 
-  return hash;
+  return "";
 };
