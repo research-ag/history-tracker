@@ -17,11 +17,13 @@ module {
   type CanisterMetadata = {
     var name : Text;
     var description : Text;
+    var latest_update_timestamp : Nat64;
   };
 
   public type SharedCanisterMetadata = {
     name : Text;
     description : Text;
+    latest_update_timestamp : Nat64;
   };
 
   type InternalState = {
@@ -81,6 +83,7 @@ module {
       var metadata = {
         var name = "";
         var description = "";
+        var latest_update_timestamp = 0;
       };
     };
 
@@ -150,6 +153,7 @@ module {
       {
         name = internal_state.metadata.name;
         description = internal_state.metadata.description;
+        latest_update_timestamp = internal_state.metadata.latest_update_timestamp;
       };
     };
 
@@ -177,6 +181,8 @@ module {
           internal_state.metadata.description := value;
         };
       };
+
+      internal_state.metadata.latest_update_timestamp := Prim.time();
     };
 
     public func share() : StableData {
@@ -192,6 +198,7 @@ module {
         metadata = {
           name = _.metadata.name;
           description = _.metadata.description;
+          latest_update_timestamp = _.metadata.latest_update_timestamp;
         };
         canister_id;
       };
@@ -208,6 +215,7 @@ module {
       internal_state.metadata := {
         var name = data.metadata.name;
         var description = data.metadata.description;
+        var latest_update_timestamp = data.metadata.latest_update_timestamp;
       };
     };
   };
