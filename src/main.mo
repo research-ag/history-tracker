@@ -6,6 +6,7 @@ import Deque "mo:base/Deque";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Timer "mo:base/Timer";
+import Array "mo:base/Array";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
 
@@ -90,6 +91,17 @@ actor class HistoryTracker() = self {
       case (?index) {
         let history = history_storage.get(index);
         await* history.update_metadata(caller, name, description);
+      };
+    };
+  };
+
+  public shared ({ caller }) func caller_is_controller(canister_id : Principal) : async Bool {
+    switch (history_storage_map.get(canister_id)) {
+      case (null) throw Error.reject("The canister is not tracked.");
+      case (?index) {
+        let history = history_storage.get(index);
+        history.canister_state()
+        |> Array.find<Principal>(_.controllers, func c = c == caller) != null;
       };
     };
   };
