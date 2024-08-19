@@ -5,6 +5,7 @@ import CssBaseline from "@mui/joy/CssBaseline";
 import GlobalStyles from "@mui/joy/GlobalStyles";
 import "@fontsource/inter";
 
+import { IdentityProvider } from "@fe/integration/identity";
 import Root from "@fe/components/root";
 
 const queryClient = new QueryClient({
@@ -31,7 +32,9 @@ const App = () => {
         <SnackbarProvider
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         >
-          <Root />
+          <IdentityProvider>
+            <Root />
+          </IdentityProvider>
         </SnackbarProvider>
       </CssVarsProvider>
     </QueryClientProvider>
