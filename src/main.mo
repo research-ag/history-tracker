@@ -100,8 +100,7 @@ actor class HistoryTracker() = self {
       case (null) throw Error.reject("The canister is not tracked.");
       case (?index) {
         let history = history_storage.get(index);
-        history.canister_state()
-        |> Array.find<Principal>(_.controllers, func c = c == caller) != null;
+        await* history.check_controller(caller);
       };
     };
   };

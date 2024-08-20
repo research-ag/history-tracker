@@ -157,15 +157,18 @@ module {
       };
     };
 
-    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* () {
+    public func check_controller(p : Principal) : async* Bool {
       let info = try {
         await ic.canister_info({
           canister_id;
           num_requested_changes = ?Nat64.fromNat(0);
         });
       } catch (_) throw Error.reject("canister_info error.");
+      Array.find<Principal>(info.controllers, func c = c == p) != null;
+    };
 
-      let is_controller = Array.find<Principal>(info.controllers, func c = c == caller) != null;
+    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* () {
+      let is_controller = await* check_controller(caller);
       if (not is_controller) throw Error.reject("Access denied.");
 
       switch (name) {
