@@ -1,11 +1,14 @@
-import { Sheet, Box, Typography, Tooltip } from "@mui/joy";
+import { Sheet, Box, Typography, Tooltip, IconButton } from "@mui/joy";
 import InfoIcon from "@mui/icons-material/Info";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 interface DashboardPageLayoutProps {
   children: React.ReactNode;
   title: string;
   rightPart?: React.ReactNode;
   noteTooltip?: React.ReactNode;
+  onRefetch?: () => void;
+  isFetching?: boolean;
 }
 
 const DashboardPageLayout = ({
@@ -13,6 +16,8 @@ const DashboardPageLayout = ({
   title,
   rightPart,
   noteTooltip,
+  onRefetch,
+  isFetching,
 }: DashboardPageLayoutProps) => {
   return (
     <Sheet
@@ -32,6 +37,13 @@ const DashboardPageLayout = ({
         {!!noteTooltip && (
           <Tooltip title={noteTooltip}>
             <InfoIcon sx={{ marginLeft: 2 }} />
+          </Tooltip>
+        )}
+        {!!onRefetch && (
+          <Tooltip title="Refresh page data">
+            <IconButton sx={{ marginLeft: 0.5 }} disabled={isFetching}>
+              <RefreshIcon onClick={onRefetch} />
+            </IconButton>
           </Tooltip>
         )}
         <Box sx={{ marginLeft: "auto" }}>{rightPart}</Box>

@@ -20,7 +20,7 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
   const openModal = () => setModalIsOpen(true);
   const closeModal = () => setModalIsOpen(false);
 
-  const { data, isFetching } = useGetCanisterMetadata(
+  const { data, isFetching, remove, refetch } = useGetCanisterMetadata(
     Principal.fromText(canisterId!)
   );
 
@@ -39,6 +39,11 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
           </Button>
         ) : undefined
       }
+      onRefetch={() => {
+        remove();
+        refetch();
+      }}
+      isFetching={isFetching}
     >
       {isFetching ? (
         <LinearProgress sx={{ marginY: 1 }} />
