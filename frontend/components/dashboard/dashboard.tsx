@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { Box, Tabs, TabList, Tab, Button, Typography } from "@mui/joy";
@@ -39,13 +39,21 @@ const Dashboard = () => {
     }
   })();
 
-  const { data: isCanisterTracked, isLoading: isCanisterTrackedLoading } =
-    useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
+  const {
+    data: isCanisterTracked,
+    isLoading: isCanisterTrackedLoading,
+    remove: removeIsCanisterTracked,
+  } = useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
 
-  const { data: callerIsController } = useCallerIsController(
-    canisterId_,
-    isCanisterTracked ?? false
-  );
+  const { data: callerIsController, remove: removeCallerIsController } =
+    useCallerIsController(canisterId_, isCanisterTracked ?? false);
+
+  useEffect(() => {
+    return () => {
+      removeIsCanisterTracked();
+      removeCallerIsController();
+    };
+  }, [removeIsCanisterTracked, removeCallerIsController]);
 
   if (isCanisterTrackedLoading) {
     return <LoadingPage />;

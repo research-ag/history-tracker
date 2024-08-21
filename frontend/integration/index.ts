@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
+import { ActorSubclass } from "@dfinity/agent";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
@@ -9,18 +10,25 @@ import { useIdentity } from "./identity";
 
 export const BACKEND_CANISTER_ID = canisterId;
 
-export const useHistoryBackend = () => {
-  const { identity } = useIdentity();
+export const useHistoryBackend = (() => {
+  let backend: ActorSubclass<_SERVICE>;
+  let prevIdentity: string;
+  return () => {
+    const { identity } = useIdentity();
 
-  const backend = createActor(canisterId, {
-    agentOptions: {
-      identity,
-      verifyQuerySignatures: false,
-    },
-  });
+    if (prevIdentity !== identity.getPrincipal().toText()) {
+      backend = createActor(canisterId, {
+        agentOptions: {
+          identity,
+          verifyQuerySignatures: false,
+        },
+      });
+      prevIdentity = identity.getPrincipal().toText();
+    }
 
-  return { backend };
-};
+    return { backend };
+  };
+})();
 
 export const useGetIsCanisterTracked = (
   canisterId: Principal,
@@ -30,7 +38,7 @@ export const useGetIsCanisterTracked = (
   return useQuery(
     ["is-canister-tracked", canisterId.toString()],
     () => backend.is_canister_tracked(canisterId),
-    { enabled, staleTime: 0 }
+    { enabled }
   );
 };
 
