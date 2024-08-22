@@ -21,7 +21,7 @@ dfx start --clean --background
 ```
 3. Generate canister type declarations:
 ```
-dfx generate
+dfx generate history_be
 ```
 4. Deploy canisters locally:
 ```
