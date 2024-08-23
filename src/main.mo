@@ -40,7 +40,7 @@ actor class HistoryTracker() = self {
 
   stable var stable_data : StableData = (convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
 
-  public func is_canister_tracked(canister_id : Principal) : async Bool {
+  public query func is_canister_tracked(canister_id : Principal) : async Bool {
     history_storage_map.get(canister_id) != null;
   };
 
@@ -54,7 +54,7 @@ actor class HistoryTracker() = self {
     sync_queue := Deque.pushBack(sync_queue, last_index);
   };
 
-  public func canister_changes(canister_id : Principal) : async CanisterHistory.CanisterChangesResponse {
+  public query func canister_changes(canister_id : Principal) : async CanisterHistory.CanisterChangesResponse {
     switch (history_storage_map.get(canister_id)) {
       case (null) throw Error.reject("The canister is not tracked.");
       case (?index) {
@@ -64,12 +64,42 @@ actor class HistoryTracker() = self {
     };
   };
 
-  public func canister_state(canister_id : Principal) : async CanisterHistory.CanisterStateResponse {
+  public query func canister_state(canister_id : Principal) : async CanisterHistory.CanisterStateResponse {
     switch (history_storage_map.get(canister_id)) {
       case (null) throw Error.reject("The canister is not tracked.");
       case (?index) {
         let history = history_storage.get(index);
         history.canister_state();
+      };
+    };
+  };
+
+  public query func metadata(canister_id : Principal) : async CanisterHistory.SharedCanisterMetadata {
+    switch (history_storage_map.get(canister_id)) {
+      case (null) throw Error.reject("The canister is not tracked.");
+      case (?index) {
+        let history = history_storage.get(index);
+        history.metadata();
+      };
+    };
+  };
+
+  public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async () {
+    switch (history_storage_map.get(canister_id)) {
+      case (null) throw Error.reject("The canister is not tracked.");
+      case (?index) {
+        let history = history_storage.get(index);
+        await* history.update_metadata(caller, name, description);
+      };
+    };
+  };
+
+  public shared ({ caller }) func caller_is_controller(canister_id : Principal) : async Bool {
+    switch (history_storage_map.get(canister_id)) {
+      case (null) throw Error.reject("The canister is not tracked.");
+      case (?index) {
+        let history = history_storage.get(index);
+        await* history.check_controller(caller);
       };
     };
   };

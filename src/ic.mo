@@ -54,6 +54,6 @@ module {
   };
 
   public type Management = actor {
-    canister_info : CanisterInfoRequest -> async CanisterInfoResponse;
+    canister_info : query CanisterInfoRequest -> async CanisterInfoResponse;
   };
 };

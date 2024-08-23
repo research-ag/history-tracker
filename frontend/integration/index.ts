@@ -1,16 +1,34 @@
-import { useMutation, useQuery } from "react-query";
+import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
+import { ActorSubclass } from "@dfinity/agent";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
 
+import { useIdentity } from "./identity";
+
 export const BACKEND_CANISTER_ID = canisterId;
 
-export const useHistoryBackend = () => {
-  const backend = createActor(canisterId);
-  return { backend };
-};
+export const useHistoryBackend = (() => {
+  let backend: ActorSubclass<_SERVICE>;
+  let prevIdentity: string;
+  return () => {
+    const { identity } = useIdentity();
+
+    if (prevIdentity !== identity.getPrincipal().toText()) {
+      backend = createActor(canisterId, {
+        agentOptions: {
+          identity,
+          verifyQuerySignatures: false,
+        },
+      });
+      prevIdentity = identity.getPrincipal().toText();
+    }
+
+    return { backend };
+  };
+})();
 
 export const useGetIsCanisterTracked = (
   canisterId: Principal,
@@ -66,6 +84,86 @@ export const useGetCanisterState = (canisterId: Principal) => {
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister state", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+export const useCallerIsController = (
+  canisterId: Principal,
+  enabled: boolean
+) => {
+  const { backend } = useHistoryBackend();
+  const { identity } = useIdentity();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    [
+      "caller-is-controller",
+      canisterId.toString(),
+      identity.getPrincipal().toText(),
+    ],
+    () => backend.caller_is_controller(canisterId),
+    {
+      enabled,
+      onError: () => {
+        enqueueSnackbar(
+          "Failed to check if the caller is a canister controller",
+          {
+            variant: "error",
+          }
+        );
+      },
+    }
+  );
+};
+
+export const useGetCanisterMetadata = (canisterId: Principal) => {
+  const { backend } = useHistoryBackend();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    ["canister-metadata", canisterId.toString()],
+    () => backend.metadata(canisterId),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the canister metadata", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface UpdateCanisterMetadataPayload {
+  canisterId: Principal;
+  name?: string;
+  description?: string;
+}
+
+export const useUpdateCanisterMetadata = () => {
+  const { backend } = useHistoryBackend();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(
+    ({ canisterId, name, description }: UpdateCanisterMetadataPayload) =>
+      backend.update_metadata(
+        canisterId,
+        typeof name !== "undefined" ? [name] : [],
+        typeof description !== "undefined" ? [description] : []
+      ),
+    {
+      onSuccess: (_, { canisterId }) => {
+        queryClient.invalidateQueries([
+          "canister-metadata",
+          canisterId.toString(),
+        ]);
+        enqueueSnackbar("The canister metadata has been successfully updated", {
+          variant: "success",
+        });
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to update the canister metadata", {
           variant: "error",
         });
       },

@@ -1,159 +1,31 @@
 import { useParams } from "react-router-dom";
 import { parseISO, format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Box, Divider, LinearProgress, Table, Typography } from "@mui/joy";
-import { SHA256, enc } from "crypto-js";
+import { Box, LinearProgress, Table, useTheme } from "@mui/joy";
 
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { useGetCanisterChanges } from "@fe/integration";
-import { CanisterChange } from "@declarations/history_be/history_be.did";
 
-import ItemWithDetails from "./item-with-details";
+import HistorySummarySection from "./history-summary-section";
+import HistoryInfoLine from "./history-info-line";
+import GapsRowContent from "./gap-row-content";
+import ActionCell from "./action-cell";
+import OriginCell from "./origin-cell";
+import { addGaps } from "./utils";
 
 const Changes = () => {
+  const theme = useTheme();
+
   const { canisterId } = useParams();
 
-  const { data, isLoading } = useGetCanisterChanges(
+  const { data, isFetching, remove, refetch } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
-
-  const isCorrupted = !!data?.corruption_timestamp?.[0];
-
-  const renderAction = (change: CanisterChange): React.ReactNode => {
-    if ("creation" in change.details)
-      return (
-        <ItemWithDetails
-          title="Creation"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
-              <Box component="ul">
-                {change.details.creation.controllers.map((c, i) => (
-                  <Box key={i} component="li">
-                    {c.toText()}
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          }
-        />
-      );
-    if ("code_deployment" in change.details) {
-      const codeDeploymentRecord = change.details.code_deployment;
-      const getMode = () => {
-        if ("reinstall" in codeDeploymentRecord.mode) return "Reinstall";
-        if ("upgrade" in codeDeploymentRecord.mode) return "Upgrade";
-        if ("install" in codeDeploymentRecord.mode) return "Install";
-      };
-      const getModuleHash = () => {
-        const hash = SHA256(codeDeploymentRecord.module_hash.join(","));
-        return hash.toString(enc.Hex);
-      };
-      return (
-        <ItemWithDetails
-          title="Code deployment"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box>
-                <Box sx={{ display: "inline", fontWeight: 600 }}>Mode:</Box>{" "}
-                {getMode()}
-              </Box>
-              <Box>
-                <Box
-                  sx={{
-                    display: "inline",
-                    fontWeight: 600,
-                  }}
-                >
-                  Module hash:
-                </Box>{" "}
-                {getModuleHash()}
-              </Box>
-            </Box>
-          }
-        />
-      );
-    }
-    if ("controllers_change" in change.details)
-      return (
-        <ItemWithDetails
-          title="Controllers change"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
-              <Box component="ul">
-                {change.details.controllers_change.controllers.map((c, i) => (
-                  <Box key={i} component="li">
-                    {c.toText()}
-                  </Box>
-                ))}
-              </Box>
-            </Box>
-          }
-        />
-      );
-    if ("code_uninstall" in change.details) return "Code uninstall";
-  };
-
-  const renderOrigin = (change: CanisterChange): React.ReactNode => {
-    if ("from_user" in change.origin)
-      return (
-        <ItemWithDetails
-          title="From user"
-          details={
-            <Box sx={{ overflowWrap: "break-word" }}>
-              <Box
-                sx={{
-                  display: "inline",
-                  fontWeight: 600,
-                }}
-              >
-                Principal:
-              </Box>{" "}
-              {change.origin.from_user.user_id.toString()}
-            </Box>
-          }
-        />
-      );
-    if ("from_canister" in change.origin)
-      return (
-        <ItemWithDetails
-          title="From canister"
-          details={
-            <Box>
-              <Box sx={{ overflowWrap: "break-word" }}>
-                <Box
-                  sx={{
-                    display: "inline",
-                    fontWeight: 600,
-                  }}
-                >
-                  Canister ID:
-                </Box>{" "}
-                {change.origin.from_canister.canister_id.toString()}
-              </Box>
-              <Box sx={{ overflowWrap: "break-word" }}>
-                <Box
-                  sx={{
-                    display: "inline",
-                    fontWeight: 600,
-                  }}
-                >
-                  Canister version:
-                </Box>{" "}
-                {change.origin.from_canister.canister_version.length
-                  ? Number(change.origin.from_canister.canister_version[0])
-                  : "N/A"}
-              </Box>
-            </Box>
-          }
-        />
-      );
-  };
 
   return (
     <DashboardPageLayout
       title="Changelog"
+      rightPart={<HistorySummarySection changes={data?.changes} />}
       noteTooltip={
         <Box sx={{ width: "400px" }}>
           <Box sx={{ marginBottom: 1 }}>
@@ -171,53 +43,23 @@ const Changes = () => {
           </Box>
         </Box>
       }
+      onRefetch={() => {
+        remove();
+        refetch();
+      }}
+      isFetching={isFetching}
     >
       <Box sx={{ width: "100%", overflow: "auto" }}>
-        {isLoading ? (
+        {isFetching ? (
           <LinearProgress sx={{ marginY: 1 }} />
         ) : !data ? (
           "Something went wrong"
         ) : (
           <>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Typography
-                sx={{ fontWeight: 600, textTransform: "uppercase" }}
-                level="body-xs"
-                color={isCorrupted ? "danger" : "success"}
-              >
-                {isCorrupted ? "Corrupted" : "Not corrupted"}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                Total records: {Number(data.total_num_changes)}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                Tracked records: {data.changes.length}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                History completeness:{" "}
-                {data.total_num_changes > 0
-                  ? `${(
-                      (data.changes.length / Number(data.total_num_changes)) *
-                      100
-                    ).toFixed(2)}%`
-                  : "N/A"}
-              </Typography>
-              <Divider orientation="vertical" />
-              <Typography level="body-xs">
-                Latest sync:{" "}
-                {data.timestamp_nanos > 0
-                  ? format(
-                      new Date(Number(data.timestamp_nanos) / 1_000_000),
-                      "MMM dd, yyyy HH:mm"
-                    )
-                  : "N/A"}
-              </Typography>
-            </Box>
+            <HistoryInfoLine data={data} />
             <Table sx={{ "& tr": { height: "45px" } }}>
               <colgroup>
+                <col style={{ width: "80px" }} />
                 <col style={{ width: "100px" }} />
                 <col />
                 <col />
@@ -226,6 +68,7 @@ const Changes = () => {
 
               <thead>
                 <tr>
+                  <th>Index</th>
                   <th>Version</th>
                   <th>Action</th>
                   <th>Origin</th>
@@ -233,21 +76,39 @@ const Changes = () => {
                 </tr>
               </thead>
               <tbody>
-                {[...data.changes].reverse().map((change) => {
-                  return (
-                    <tr key={change.timestamp_nanos}>
-                      <td>{Number(change.canister_version)}</td>
-                      <td>{renderAction(change)}</td>
-                      <td>{renderOrigin(change)}</td>
-                      <td>
-                        {format(
-                          new Date(Number(change.timestamp_nanos) / 1_000_000),
-                          "MMM dd, yyyy HH:mm"
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {addGaps(data.changes)
+                  .reverse()
+                  .map((change, i) => {
+                    if (typeof change == "number") {
+                      return (
+                        <tr
+                          style={{ background: theme.palette.warning[50] }}
+                          key={i}
+                        >
+                          <td colSpan={5}>
+                            <GapsRowContent gaps={change} />
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return (
+                      <tr key={change.timestamp_nanos}>
+                        <td>{Number(change.change_index)}</td>
+                        <td>{Number(change.canister_version)}</td>
+                        <td>{<ActionCell change={change} />}</td>
+                        <td>{<OriginCell change={change} />}</td>
+                        <td>
+                          {format(
+                            new Date(
+                              Number(change.timestamp_nanos) / 1_000_000
+                            ),
+                            "MMM dd, yyyy HH:mm"
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </Table>
           </>

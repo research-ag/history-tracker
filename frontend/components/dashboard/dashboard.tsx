@@ -1,20 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { Box, Tabs, TabList, Tab, Button } from "@mui/joy";
+import { Box, Tabs, TabList, Tab, Button, Typography } from "@mui/joy";
 import HomeIcon from "@mui/icons-material/Home";
 
 import Changes from "@fe/components/changes";
 import CurrentState from "@fe/components/current-state";
+import Metadata from "@fe/components/metadata";
+import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
-import { useGetIsCanisterTracked } from "@fe/integration";
 import LoadingPage from "@fe/components/loading-page";
 import ErrorLayout from "@fe/components/error-layout";
+import { useIdentity } from "@fe/integration/identity";
+import {
+  useGetIsCanisterTracked,
+  useCallerIsController,
+} from "@fe/integration";
 
 import InfoItem from "./info-item";
 
 const Dashboard = () => {
   const [tabValue, setTabValue] = useState(0);
+
+  const { identity } = useIdentity();
+
+  const userPrincipal = identity.getPrincipal().toText();
 
   const { canisterId } = useParams();
 
@@ -29,8 +39,21 @@ const Dashboard = () => {
     }
   })();
 
-  const { data: isCanisterTracked, isLoading: isCanisterTrackedLoading } =
-    useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
+  const {
+    data: isCanisterTracked,
+    isLoading: isCanisterTrackedLoading,
+    remove: removeIsCanisterTracked,
+  } = useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
+
+  const { data: callerIsController, remove: removeCallerIsController } =
+    useCallerIsController(canisterId_, isCanisterTracked ?? false);
+
+  useEffect(() => {
+    return () => {
+      removeIsCanisterTracked();
+      removeCallerIsController();
+    };
+  }, [removeIsCanisterTracked, removeCallerIsController]);
 
   if (isCanisterTrackedLoading) {
     return <LoadingPage />;
@@ -68,6 +91,16 @@ const Dashboard = () => {
               marginBottom: 1,
             }}
           >
+            {callerIsController && (
+              <Typography
+                sx={{ fontWeight: 700 }}
+                color="success"
+                level="body-xs"
+              >
+                You are a controller
+              </Typography>
+            )}
+            <InfoItem label="Your principal" content={userPrincipal} withCopy />
             <InfoItem
               label="Watched canister ID"
               content={canisterId!}
@@ -85,6 +118,7 @@ const Dashboard = () => {
           <TabList sx={{ flexGrow: 1 }} variant="plain">
             <Tab color="neutral">Canister changes</Tab>
             <Tab color="neutral">Current state</Tab>
+            <Tab color="neutral">Metadata</Tab>
           </TabList>
           <Link to="/">
             <Button
@@ -96,10 +130,14 @@ const Dashboard = () => {
               Home
             </Button>
           </Link>
+          <ConnectButton sx={{ marginLeft: 1 }} />
           <ThemeButton sx={{ marginLeft: 1 }} />
         </Box>
         {tabValue === 0 && <Changes />}
         {tabValue === 1 && <CurrentState />}
+        {tabValue === 2 && (
+          <Metadata callerIsController={callerIsController ?? false} />
+        )}
       </Tabs>
     </Box>
   );

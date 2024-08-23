@@ -1,30 +1,34 @@
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { SHA256, enc } from "crypto-js";
 import { Box, LinearProgress, Typography } from "@mui/joy";
 
 import { useGetCanisterState } from "@fe/integration";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { CanisterStateResponse } from "@declarations/history_be/history_be.did";
+import { mapModuleHash } from "@fe/constants/knownHashes";
+import { getSHA256Hash } from "@fe/utils/hash";
 
 const CurrentState = () => {
   const { canisterId } = useParams();
 
-  const { data, isLoading } = useGetCanisterState(
+  const { data, isFetching, remove, refetch } = useGetCanisterState(
     Principal.fromText(canisterId!)
   );
 
-  const isCorrupted = !!data?.corruption_timestamp?.[0];
-
-  const getModuleHash = (data: CanisterStateResponse) => {
-    const hash = SHA256(data.module_hash.join(","));
-    return hash.toString(enc.Hex);
-  };
+  const getModuleHash = (data: CanisterStateResponse) =>
+    data.module_hash[0] ? getSHA256Hash(data.module_hash[0]) : "";
 
   return (
-    <DashboardPageLayout title="State">
-      {isLoading ? (
+    <DashboardPageLayout
+      title="State"
+      onRefetch={() => {
+        remove();
+        refetch();
+      }}
+      isFetching={isFetching}
+    >
+      {isFetching ? (
         <LinearProgress sx={{ marginY: 1 }} />
       ) : !data ? (
         "Something went wrong"
@@ -40,18 +44,15 @@ const CurrentState = () => {
               : "N/A"}
           </Typography>
           <Box sx={{ marginBottom: 1 }}>
-            <Box sx={{ fontWeight: 600 }}>Corruption status:</Box>{" "}
-            {isCorrupted
-              ? `Corrupted (detected at ${format(
-                  new Date(Number(data!.corruption_timestamp![0]) / 1_000_000),
-                  "MMM dd, yyyy HH:mm"
-                )})`
-              : "Not corrupted"}
-          </Box>
-          <Box sx={{ marginBottom: 1 }}>
             <Box sx={{ fontWeight: 600 }}>Module hash:</Box>{" "}
-            {getModuleHash(data)}
+            <Box>{getModuleHash(data)}</Box>
           </Box>
+          {mapModuleHash(getModuleHash(data)) && (
+            <Box sx={{ marginBottom: 1 }}>
+              <Box sx={{ fontWeight: 600 }}>Module hash is known as:</Box>{" "}
+              <Box>{mapModuleHash(getModuleHash(data))}</Box>
+            </Box>
+          )}
           <Box>
             <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
             <Box component="ul">
