@@ -12,7 +12,7 @@ import { getSHA256Hash } from "@fe/utils/hash";
 const CurrentState = () => {
   const { canisterId } = useParams();
 
-  const { data, isLoading } = useGetCanisterState(
+  const { data, isFetching, remove, refetch } = useGetCanisterState(
     Principal.fromText(canisterId!)
   );
 
@@ -20,8 +20,15 @@ const CurrentState = () => {
     data.module_hash[0] ? getSHA256Hash(data.module_hash[0]) : "";
 
   return (
-    <DashboardPageLayout title="State">
-      {isLoading ? (
+    <DashboardPageLayout
+      title="State"
+      onRefetch={() => {
+        remove();
+        refetch();
+      }}
+      isFetching={isFetching}
+    >
+      {isFetching ? (
         <LinearProgress sx={{ marginY: 1 }} />
       ) : !data ? (
         "Something went wrong"

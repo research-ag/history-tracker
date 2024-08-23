@@ -4,6 +4,7 @@ import RBTree "mo:base/RBTree";
 import Iter "mo:base/Iter";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
+import Array "mo:base/Array";
 import Prim "mo:prim";
 
 import IC "ic"
@@ -11,6 +12,18 @@ import IC "ic"
 module {
   type ExtendedChange = IC.CanisterChange and {
     change_index : Nat;
+  };
+
+  type CanisterMetadata = {
+    var name : Text;
+    var description : Text;
+    var latest_update_timestamp : Nat64;
+  };
+
+  public type SharedCanisterMetadata = {
+    name : Text;
+    description : Text;
+    latest_update_timestamp : Nat64;
   };
 
   type InternalState = {
@@ -21,6 +34,7 @@ module {
     var controllers : [Principal]; // current controllers
     var timestamp_nanos : Nat64; // latest sync timestamp
     var sync_version : Nat; // sync version (nubmer of syncs)
+    var metadata : CanisterMetadata;
   };
 
   public type StableData = {
@@ -31,6 +45,7 @@ module {
     controllers : [Principal];
     timestamp_nanos : Nat64;
     sync_version : Nat;
+    metadata : SharedCanisterMetadata;
     // * for remembering associated canister id
     canister_id : Principal;
   };
@@ -65,6 +80,11 @@ module {
       var controllers = [];
       var timestamp_nanos = 0;
       var sync_version = 0;
+      var metadata = {
+        var name = "";
+        var description = "";
+        var latest_update_timestamp = 0;
+      };
     };
 
     let ic = actor "aaaaa-aa" : IC.Management;
@@ -129,6 +149,45 @@ module {
       };
     };
 
+    public func metadata() : SharedCanisterMetadata {
+      {
+        name = internal_state.metadata.name;
+        description = internal_state.metadata.description;
+        latest_update_timestamp = internal_state.metadata.latest_update_timestamp;
+      };
+    };
+
+    public func check_controller(p : Principal) : async* Bool {
+      let info = try {
+        await ic.canister_info({
+          canister_id;
+          num_requested_changes = ?Nat64.fromNat(0);
+        });
+      } catch (_) throw Error.reject("canister_info error.");
+      Array.find<Principal>(info.controllers, func c = c == p) != null;
+    };
+
+    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* () {
+      let is_controller = await* check_controller(caller);
+      if (not is_controller) throw Error.reject("Access denied.");
+
+      switch (name) {
+        case null {};
+        case (?value) {
+          internal_state.metadata.name := value;
+        };
+      };
+
+      switch (description) {
+        case null {};
+        case (?value) {
+          internal_state.metadata.description := value;
+        };
+      };
+
+      internal_state.metadata.latest_update_timestamp := Prim.time();
+    };
+
     public func share() : StableData {
       internal_state
       |> {
@@ -139,6 +198,11 @@ module {
         controllers = _.controllers;
         timestamp_nanos = _.timestamp_nanos;
         sync_version = _.sync_version;
+        metadata = {
+          name = _.metadata.name;
+          description = _.metadata.description;
+          latest_update_timestamp = _.metadata.latest_update_timestamp;
+        };
         canister_id;
       };
     };
@@ -151,6 +215,11 @@ module {
       internal_state.controllers := data.controllers;
       internal_state.timestamp_nanos := data.timestamp_nanos;
       internal_state.sync_version := data.sync_version;
+      internal_state.metadata := {
+        var name = data.metadata.name;
+        var description = data.metadata.description;
+        var latest_update_timestamp = data.metadata.latest_update_timestamp;
+      };
     };
   };
 };

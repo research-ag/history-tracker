@@ -18,7 +18,7 @@ const Changes = () => {
 
   const { canisterId } = useParams();
 
-  const { data, isLoading } = useGetCanisterChanges(
+  const { data, isFetching, remove, refetch } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
 
@@ -43,9 +43,14 @@ const Changes = () => {
           </Box>
         </Box>
       }
+      onRefetch={() => {
+        remove();
+        refetch();
+      }}
+      isFetching={isFetching}
     >
       <Box sx={{ width: "100%", overflow: "auto" }}>
-        {isLoading ? (
+        {isFetching ? (
           <LinearProgress sx={{ marginY: 1 }} />
         ) : !data ? (
           "Something went wrong"
