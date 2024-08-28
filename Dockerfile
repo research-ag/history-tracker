@@ -23,11 +23,5 @@ RUN node --version && yarn --version && dfx --version
 COPY . /project
 WORKDIR /project
 
-# Install project yarn dependencies
-RUN yarn
-
-# Generate declarations for frontend
-RUN . ~/.bashrc && dfx generate history_be
-
 # Command by default
 CMD ["dfx", "start", "--emulator", "--background"]
