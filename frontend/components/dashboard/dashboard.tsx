@@ -7,6 +7,7 @@ import HomeIcon from "@mui/icons-material/Home";
 import Changes from "@fe/components/changes";
 import CurrentState from "@fe/components/current-state";
 import Metadata from "@fe/components/metadata";
+import Manage from "@fe/components/manage";
 import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
 import LoadingPage from "@fe/components/loading-page";
@@ -119,6 +120,7 @@ const Dashboard = () => {
             <Tab color="neutral">Canister changes</Tab>
             <Tab color="neutral">Current state</Tab>
             <Tab color="neutral">Metadata</Tab>
+            <Tab color="neutral">Manage</Tab>
           </TabList>
           <Link to="/">
             <Button
@@ -137,6 +139,9 @@ const Dashboard = () => {
         {tabValue === 1 && <CurrentState />}
         {tabValue === 2 && (
           <Metadata callerIsController={callerIsController ?? false} />
+        )}
+        {tabValue === 3 && (
+          <Manage callerIsController={callerIsController ?? false} />
         )}
       </Tabs>
     </Box>

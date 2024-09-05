@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
-import { ActorSubclass } from "@dfinity/agent";
+import { ActorSubclass, Actor, HttpAgent } from "@dfinity/agent";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
 
+import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
+import { idlFactory as managementIdlFactory } from "./management_idl/idl";
 import { useIdentity } from "./identity";
 
 export const BACKEND_CANISTER_ID = canisterId;
+export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
 
 export const useHistoryBackend = (() => {
   let backend: ActorSubclass<_SERVICE>;
@@ -27,6 +30,31 @@ export const useHistoryBackend = (() => {
     }
 
     return { backend };
+  };
+})();
+
+export const useManagementCanister = (() => {
+  let management: ActorSubclass<MANAGEMENT_SERVICE>;
+  let prevIdentity: string;
+  return () => {
+    const { identity } = useIdentity();
+
+    if (prevIdentity !== identity.getPrincipal().toText()) {
+      const agent = new HttpAgent({ identity, verifyQuerySignatures: false });
+      management = Actor.createActor(managementIdlFactory, {
+        canisterId: MANAGEMENT_CANISTER_ID,
+        agent: agent,
+      });
+      agent.fetchRootKey().catch((err) => {
+        console.warn(
+          "Unable to fetch root key. Check to ensure that your local replica is running"
+        );
+        console.error(err);
+      });
+      prevIdentity = identity.getPrincipal().toText();
+    }
+
+    return { management };
   };
 })();
 
@@ -167,6 +195,23 @@ export const useUpdateCanisterMetadata = () => {
           variant: "error",
         });
       },
+    }
+  );
+};
+
+export const useCanisterStatus = (canisterId: Principal, enabled: boolean) => {
+  const { management } = useManagementCanister();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    ["canister-status", canisterId.toString()],
+    () => management.canister_status({ canister_id: canisterId }),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the canister status", {
+          variant: "error",
+        });
+      },
+      enabled,
     }
   );
 };
