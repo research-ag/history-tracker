@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
-import { ActorSubclass, Actor, HttpAgent } from "@dfinity/agent";
+import { ActorSubclass, Actor, HttpAgent, Identity } from "@dfinity/agent";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
@@ -33,30 +34,41 @@ export const useHistoryBackend = (() => {
   };
 })();
 
-export const useManagementCanister = (() => {
-  let management: ActorSubclass<MANAGEMENT_SERVICE>;
-  let prevIdentity: string;
-  return () => {
-    const { identity } = useIdentity();
+export const useManagementCanister = (effectiveCanisterId: Principal) => {
+  const { identity } = useIdentity();
+  const [management, setManagement] = useState<
+    ActorSubclass<MANAGEMENT_SERVICE>
+  >(
+    Actor.createActor(managementIdlFactory, {
+      canisterId: MANAGEMENT_CANISTER_ID,
+      agent: createHttpAgent(identity),
+      effectiveCanisterId,
+    })
+  );
 
-    if (prevIdentity !== identity.getPrincipal().toText()) {
-      const agent = new HttpAgent({ identity, verifyQuerySignatures: false });
-      management = Actor.createActor(managementIdlFactory, {
+  useEffect(() => {
+    setManagement(
+      Actor.createActor(managementIdlFactory, {
         canisterId: MANAGEMENT_CANISTER_ID,
-        agent: agent,
-      });
-      agent.fetchRootKey().catch((err) => {
-        console.warn(
-          "Unable to fetch root key. Check to ensure that your local replica is running"
-        );
-        console.error(err);
-      });
-      prevIdentity = identity.getPrincipal().toText();
-    }
+        agent: createHttpAgent(identity),
+        effectiveCanisterId,
+      })
+    );
+  }, [identity.getPrincipal().toText(), effectiveCanisterId.toText()]);
 
-    return { management };
-  };
-})();
+  return { management };
+};
+
+const createHttpAgent = (identity: Identity) => {
+  const agent = new HttpAgent({ identity, verifyQuerySignatures: false });
+  agent.fetchRootKey().catch((err) => {
+    console.warn(
+      "Unable to fetch root key. Check to ensure that your local replica is running"
+    );
+    console.error(err);
+  });
+  return agent;
+};
 
 export const useGetIsCanisterTracked = (
   canisterId: Principal,
@@ -200,7 +212,7 @@ export const useUpdateCanisterMetadata = () => {
 };
 
 export const useCanisterStatus = (canisterId: Principal, enabled: boolean) => {
-  const { management } = useManagementCanister();
+  const { management } = useManagementCanister(canisterId);
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-status", canisterId.toString()],
