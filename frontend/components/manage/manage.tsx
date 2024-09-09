@@ -64,7 +64,9 @@ const Manage = ({ callerIsController }: ManageProps) => {
         <Box>
           <Box sx={{ marginBottom: 1 }}>
             <Box sx={{ display: "inline", fontWeight: 600 }}>Cycles:</Box>{" "}
-            <Box sx={{ display: "inline" }}>{Number(data.cycles)}</Box>
+            <Box sx={{ display: "inline" }}>
+              {(Number(data.cycles) / 1e12).toFixed(3)} TC (trillion cycles)
+            </Box>
           </Box>
           <Box sx={{ marginBottom: 1 }}>
             <Box sx={{ display: "inline", fontWeight: 600 }}>Status:</Box>{" "}

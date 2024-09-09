@@ -16,6 +16,7 @@ import { useIdentity } from "@fe/integration/identity";
 import {
   useGetIsCanisterTracked,
   useCallerIsController,
+  useCanisterStatus,
 } from "@fe/integration";
 
 import InfoItem from "./info-item";
@@ -48,6 +49,8 @@ const Dashboard = () => {
 
   const { data: callerIsController, remove: removeCallerIsController } =
     useCallerIsController(canisterId_, isCanisterTracked ?? false);
+
+  useCanisterStatus(canisterId_, callerIsController ?? false);
 
   useEffect(() => {
     return () => {
