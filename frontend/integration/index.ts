@@ -2,7 +2,15 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
-import { ActorSubclass, Actor, HttpAgent, Identity } from "@dfinity/agent";
+import {
+  ActorSubclass,
+  Actor,
+  HttpAgent,
+  Identity,
+  Certificate,
+  LookupStatus,
+} from "@dfinity/agent";
+import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
@@ -10,6 +18,7 @@ import { _SERVICE } from "@declarations/history_be/history_be.did";
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
 import { useIdentity } from "./identity";
+import { arrayBufferToHex } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
@@ -70,6 +79,18 @@ const createHttpAgent = (identity: Identity) => {
   return agent;
 };
 
+export const useHttpAgent = () => {
+  const { identity } = useIdentity();
+
+  const [httpAgent, setHttpAgent] = useState(createHttpAgent(identity));
+
+  useEffect(() => {
+    setHttpAgent(createHttpAgent(identity));
+  }, [identity.getPrincipal().toText()]);
+
+  return httpAgent;
+};
+
 export const useGetIsCanisterTracked = (
   canisterId: Principal,
   enabled: boolean
@@ -115,15 +136,71 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
   );
 };
 
-export const useGetCanisterState = (canisterId: Principal) => {
-  const { backend } = useHistoryBackend();
+export const useReadState = (canisterId: Principal) => {
+  const agent = useHttpAgent();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
-    ["canister-state", canisterId.toString()],
-    () => backend.canister_state(canisterId),
+    ["canister-module-hash", canisterId.toString()],
+    async () => {
+      const moduleHashPath: ArrayBuffer[] = [
+        new TextEncoder().encode("canister"),
+        canisterId.toUint8Array(),
+        new TextEncoder().encode("module_hash"),
+      ];
+
+      const controllersPath: ArrayBuffer[] = [
+        new TextEncoder().encode("canister"),
+        canisterId.toUint8Array(),
+        new TextEncoder().encode("controllers"),
+      ];
+
+      const res = await agent.readState(canisterId.toString(), {
+        paths: [moduleHashPath, controllersPath],
+      });
+
+      const cert = await Certificate.create({
+        certificate: res.certificate,
+        rootKey: await agent.fetchRootKey(),
+        canisterId,
+      });
+
+      const data: { moduleHash: string; controllers: Array<string> } = {
+        moduleHash: "",
+        controllers: [],
+      };
+
+      const moduleHash = cert.lookup(moduleHashPath);
+      if (moduleHash.status === LookupStatus.Found) {
+        const hex = arrayBufferToHex(moduleHash.value as ArrayBuffer);
+        data.moduleHash = hex;
+      } else {
+        throw new Error(`module_hash LookupStatus: ${moduleHash.status}`);
+      }
+
+      const controllers = cert.lookup(controllersPath);
+      if (controllers.status === LookupStatus.Found) {
+        const tags: TagDecoder[] = [];
+        tags[55799] = (val: any) => val;
+
+        const [decoded]: [Uint8Array[], Uint8Array] = decodeFirst(
+          new Uint8Array(controllers.value as ArrayBuffer),
+          { tags }
+        );
+
+        const controllersList = decoded.map((buf) =>
+          Principal.fromUint8Array(buf).toText()
+        );
+
+        data.controllers = controllersList;
+      } else {
+        throw new Error(`controllers LookupStatus: ${moduleHash.status}`);
+      }
+
+      return data;
+    },
     {
       onError: () => {
-        enqueueSnackbar("Failed to fetch the canister state", {
+        enqueueSnackbar("Failed to read the canister state", {
           variant: "error",
         });
       },
