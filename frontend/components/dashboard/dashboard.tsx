@@ -20,9 +20,10 @@ import {
 } from "@fe/integration";
 
 import InfoItem from "./info-item";
+import { useTabManagement } from "./tabs-management";
 
 const Dashboard = () => {
-  const [tabValue, setTabValue] = useState(0);
+  const { tabValue, setTabValue } = useTabManagement();
 
   const { identity } = useIdentity();
 
