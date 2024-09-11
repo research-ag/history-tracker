@@ -1,10 +1,12 @@
+import { useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { parseISO, format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Box, LinearProgress, Table, useTheme } from "@mui/joy";
+import { Alert, Box, LinearProgress, Table, useTheme } from "@mui/joy";
 
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
-import { useGetCanisterChanges } from "@fe/integration";
+import { useGetCanisterChanges, useReadState } from "@fe/integration";
+import { getSHA256Hash } from "@fe/utils/hash";
 
 import HistorySummarySection from "./history-summary-section";
 import HistoryInfoLine from "./history-info-line";
@@ -21,6 +23,24 @@ const Changes = () => {
   const { data, isFetching, remove, refetch } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
+
+  const { data: { moduleHash: actualModuleHash } = { moduleHash: "" } } =
+    useReadState(Principal.fromText(canisterId!));
+
+  const showWarning = useMemo(() => {
+    if (!data || !actualModuleHash) {
+      return false;
+    }
+
+    for (const change of [...data.changes].reverse()) {
+      if ("code_deployment" in change.details) {
+        const { module_hash } = change.details.code_deployment;
+        return getSHA256Hash(module_hash) !== actualModuleHash;
+      }
+    }
+
+    return false;
+  }, [data, actualModuleHash]);
 
   return (
     <DashboardPageLayout
@@ -56,6 +76,14 @@ const Changes = () => {
           "Something went wrong"
         ) : (
           <>
+            {showWarning && (
+              <Box sx={{ marginBottom: 1 }}>
+                <Alert color="warning" size="sm">
+                  The actual module hash is different from that found in the
+                  latest sync. Probably the changelog is awaiting an update.
+                </Alert>
+              </Box>
+            )}
             <HistoryInfoLine data={data} />
             <Table sx={{ "& tr": { height: "45px" } }}>
               <colgroup>
