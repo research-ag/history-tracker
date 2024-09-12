@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useParams } from "react-router-dom";
-import { parseISO, format } from "date-fns";
+import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
 import { Alert, Box, LinearProgress, Table, useTheme } from "@mui/joy";
 
@@ -52,8 +52,7 @@ const Changes = () => {
             Please be aware that the history of a canister on the Internet
             Computer can only be recorded and accessed from the moment the
             feature enabling canister history tracking was released. This
-            feature was officially launched on{" "}
-            {format(parseISO("2023-06-05T09:47:46Z"), "MMM dd, yyyy HH:mm")}.
+            feature was officially launched on 2023-06-05, 9:47:46 AM UTC.
           </Box>
           <Box>
             Any actions or events involving canisters prior to this date will
