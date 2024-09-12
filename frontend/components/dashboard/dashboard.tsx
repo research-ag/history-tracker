@@ -14,6 +14,7 @@ import LoadingPage from "@fe/components/loading-page";
 import ErrorLayout from "@fe/components/error-layout";
 import { useIdentity } from "@fe/integration/identity";
 import {
+  BACKEND_CANISTER_ID,
   useGetIsCanisterTracked,
   useCallerIsController,
   useCanisterStatus,
@@ -106,6 +107,11 @@ const Dashboard = () => {
               </Typography>
             )}
             <InfoItem label="Your principal" content={userPrincipal} withCopy />
+            <InfoItem
+              label="Backend canister ID"
+              content={BACKEND_CANISTER_ID}
+              withCopy
+            />
             <InfoItem
               label="Watched canister ID"
               content={canisterId!}
