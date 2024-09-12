@@ -12,6 +12,7 @@ import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
 import LoadingPage from "@fe/components/loading-page";
 import ErrorLayout from "@fe/components/error-layout";
+import InfoItem from "@fe/components/info-item";
 import { useIdentity } from "@fe/integration/identity";
 import {
   BACKEND_CANISTER_ID,
@@ -20,7 +21,6 @@ import {
   useCanisterStatus,
 } from "@fe/integration";
 
-import InfoItem from "./info-item";
 import { useTabManagement } from "./tabs-management";
 
 const Dashboard = () => {

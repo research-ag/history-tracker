@@ -13,7 +13,10 @@ import {
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import AddIcon from "@mui/icons-material/Add";
 
+import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
+import InfoItem from "@fe/components/info-item";
+import { useIdentity } from "@fe/integration/identity";
 
 import TrackModal from "./track-modal";
 import icpLogo from "./icp-logo.svg";
@@ -25,6 +28,10 @@ const Home = () => {
   const [validationError, setValidationError] = useState(false);
 
   const [trackModalOpen, setTrackModalOpen] = useState(false);
+
+  const { identity } = useIdentity();
+
+  const userPrincipal = identity.getPrincipal().toText();
 
   const handleSubmit = () => {
     if (!canisterId) {
@@ -59,11 +66,30 @@ const Home = () => {
       }}
     >
       <Box
+        sx={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: 1,
+        }}
+      >
+        <InfoItem label="Your principal" content={userPrincipal} withCopy />
+      </Box>
+      <Box
         sx={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 5 }}
       >
         <img style={{ height: "24px" }} src={icpLogo} alt="ICP logo" />
         <Typography level="h1">ICP History Tracker</Typography>
-        <ThemeButton sx={{ marginLeft: "auto" }} />
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            marginLeft: "auto",
+          }}
+        >
+          <ConnectButton />
+          <ThemeButton />
+        </Box>
       </Box>
       <Box sx={{ marginBottom: 5 }}>
         <FormControl
