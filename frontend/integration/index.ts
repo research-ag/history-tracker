@@ -18,7 +18,7 @@ import { _SERVICE } from "@declarations/history_be/history_be.did";
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
 import { useIdentity } from "./identity";
-import { arrayBufferToHex } from "./utils";
+import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
@@ -297,6 +297,42 @@ export const useCanisterStatus = (canisterId: Principal, enabled: boolean) => {
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister status", {
+          variant: "error",
+        });
+      },
+      enabled,
+    }
+  );
+};
+
+export interface MappedCanisterLogRecord {
+  content: string;
+  idx: number;
+  timestamp_nanos: bigint;
+}
+
+export const useFetchCanisterLogs = (
+  canisterId: Principal,
+  enabled: boolean
+) => {
+  const { management } = useManagementCanister(canisterId);
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    ["canister-logs", canisterId.toString()],
+    async (): Promise<MappedCanisterLogRecord[]> => {
+      const data = await management.fetch_canister_logs({
+        canister_id: canisterId,
+      });
+
+      return data.canister_log_records.map((record) => ({
+        idx: Number(record.idx),
+        timestamp_nanos: record.timestamp_nanos,
+        content: parseUint8ArrayToText(record.content as Uint8Array),
+      }));
+    },
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the canister logs", {
           variant: "error",
         });
       },

@@ -40,7 +40,7 @@
       "packtool": "mops sources"
     }
   },
-  "dfx": "0.20.1",
+  "dfx": "0.22.0",
   "version": 1,
   "output_env_file": ".env"
 }

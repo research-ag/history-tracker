@@ -1,4 +1,5 @@
-import { IconButton, useColorScheme } from "@mui/joy";
+import { IconButton } from "@mui/joy";
+import { useColorScheme } from "@mui/joy/styles";
 import { SxProps } from "@mui/joy/styles/types";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
