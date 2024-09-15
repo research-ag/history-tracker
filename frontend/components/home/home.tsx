@@ -17,6 +17,7 @@ import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
 import InfoItem from "@fe/components/info-item";
 import { useIdentity } from "@fe/integration/identity";
+import { BACKEND_CANISTER_ID } from "@fe/integration";
 
 import TrackModal from "./track-modal";
 import icpLogo from "./icp-logo.svg";
@@ -68,11 +69,18 @@ const Home = () => {
       <Box
         sx={{
           display: "flex",
-          justifyContent: "flex-end",
+          flexDirection: "column",
+          alignItems: "flex-end",
+          gap: 0.5,
           marginBottom: 1,
         }}
       >
         <InfoItem label="Your principal" content={userPrincipal} withCopy />
+        <InfoItem
+          label="Backend canister ID"
+          content={BACKEND_CANISTER_ID}
+          withCopy
+        />
       </Box>
       <Box
         sx={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 5 }}
