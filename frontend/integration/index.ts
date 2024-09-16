@@ -43,7 +43,7 @@ export const useHistoryBackend = (() => {
   };
 })();
 
-export const useManagementCanister = (effectiveCanisterId: Principal) => {
+export const useManagementCanister = () => {
   const { identity } = useIdentity();
   const [management, setManagement] = useState<
     ActorSubclass<MANAGEMENT_SERVICE>
@@ -51,7 +51,6 @@ export const useManagementCanister = (effectiveCanisterId: Principal) => {
     Actor.createActor(managementIdlFactory, {
       canisterId: MANAGEMENT_CANISTER_ID,
       agent: createHttpAgent(identity),
-      effectiveCanisterId,
     })
   );
 
@@ -60,10 +59,9 @@ export const useManagementCanister = (effectiveCanisterId: Principal) => {
       Actor.createActor(managementIdlFactory, {
         canisterId: MANAGEMENT_CANISTER_ID,
         agent: createHttpAgent(identity),
-        effectiveCanisterId,
       })
     );
-  }, [identity.getPrincipal().toText(), effectiveCanisterId.toText()]);
+  }, [identity.getPrincipal().toText()]);
 
   return { management };
 };
@@ -289,11 +287,14 @@ export const useUpdateCanisterMetadata = () => {
 };
 
 export const useCanisterStatus = (canisterId: Principal, enabled: boolean) => {
-  const { management } = useManagementCanister(canisterId);
+  const { management } = useManagementCanister();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-status", canisterId.toString()],
-    () => management.canister_status({ canister_id: canisterId }),
+    () =>
+      management.canister_status.withOptions({
+        effectiveCanisterId: canisterId,
+      })({ canister_id: canisterId }),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister status", {
@@ -315,12 +316,14 @@ export const useFetchCanisterLogs = (
   canisterId: Principal,
   enabled: boolean
 ) => {
-  const { management } = useManagementCanister(canisterId);
+  const { management } = useManagementCanister();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-logs", canisterId.toString()],
     async (): Promise<MappedCanisterLogRecord[]> => {
-      const data = await management.fetch_canister_logs({
+      const data = await management.fetch_canister_logs.withOptions({
+        effectiveCanisterId: canisterId,
+      })({
         canister_id: canisterId,
       });
 
