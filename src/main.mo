@@ -94,16 +94,6 @@ actor class HistoryTracker() = self {
     };
   };
 
-  public shared ({ caller }) func caller_is_controller(canister_id : Principal) : async Bool {
-    switch (history_storage_map.get(canister_id)) {
-      case (null) throw Error.reject("The canister is not tracked.");
-      case (?index) {
-        let history = history_storage.get(index);
-        await* history.check_controller(caller);
-      };
-    };
-  };
-
   func trigger_sync() : async* () {
     var ctr = 0;
     let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
