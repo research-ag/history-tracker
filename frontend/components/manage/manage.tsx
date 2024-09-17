@@ -22,14 +22,12 @@ const Manage = ({ callerIsController }: ManageProps) => {
   const {
     data: canisterStatus,
     isFetching: isStatusFetching,
-    remove: statusRemove,
     refetch: statusRefetch,
   } = useCanisterStatus(Principal.fromText(canisterId!), callerIsController);
 
   const {
     data: logs,
     isFetching: isLogsFetching,
-    remove: logsRemove,
     refetch: logsRefetch,
   } = useFetchCanisterLogs(Principal.fromText(canisterId!), callerIsController);
 
@@ -76,9 +74,7 @@ const Manage = ({ callerIsController }: ManageProps) => {
       onRefetch={
         callerIsController
           ? () => {
-              statusRemove();
               statusRefetch();
-              logsRemove();
               logsRefetch();
             }
           : undefined

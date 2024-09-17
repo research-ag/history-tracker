@@ -20,12 +20,12 @@ const Changes = () => {
 
   const { canisterId } = useParams();
 
-  const { data, isFetching, remove, refetch } = useGetCanisterChanges(
+  const { data, isFetching, refetch } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
 
   const { data: { moduleHash: actualModuleHash } = { moduleHash: "" } } =
-    useReadState(Principal.fromText(canisterId!));
+    useReadState(Principal.fromText(canisterId!), true);
 
   const showWarning = useMemo(() => {
     if (!data || !actualModuleHash) {
@@ -63,7 +63,6 @@ const Changes = () => {
         </Box>
       }
       onRefetch={() => {
-        remove();
         refetch();
       }}
       isFetching={isFetching}

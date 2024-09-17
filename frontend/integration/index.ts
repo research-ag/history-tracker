@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
@@ -23,46 +22,46 @@ import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
 export const BACKEND_CANISTER_ID = canisterId;
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
 
-export const useHistoryBackend = (() => {
-  let backend: ActorSubclass<_SERVICE>;
-  let prevIdentity: string;
-  return () => {
-    const { identity } = useIdentity();
+const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
+  const map: Record<string, R> = {};
+  return (fn: () => R, deps: any[]): R => {
+    const depsKey = JSON.stringify(deps);
 
-    if (prevIdentity !== identity.getPrincipal().toText()) {
-      backend = createActor(canisterId, {
+    if (!map[depsKey]) {
+      map[depsKey] = fn();
+    }
+
+    return map[depsKey];
+  };
+};
+
+const getBackendFromCache = memoize<ActorSubclass<_SERVICE>>();
+export const useHistoryBackend = () => {
+  const { identity } = useIdentity();
+  const backend = getBackendFromCache(
+    () =>
+      createActor(canisterId, {
         agentOptions: {
           identity,
           verifyQuerySignatures: false,
         },
-      });
-      prevIdentity = identity.getPrincipal().toText();
-    }
+      }),
+    [identity.getPrincipal().toText()]
+  );
+  return { backend };
+};
 
-    return { backend };
-  };
-})();
-
+const getManagementFromCache = memoize<ActorSubclass<MANAGEMENT_SERVICE>>();
 export const useManagementCanister = () => {
   const { identity } = useIdentity();
-  const [management, setManagement] = useState<
-    ActorSubclass<MANAGEMENT_SERVICE>
-  >(
-    Actor.createActor(managementIdlFactory, {
-      canisterId: MANAGEMENT_CANISTER_ID,
-      agent: createHttpAgent(identity),
-    })
-  );
-
-  useEffect(() => {
-    setManagement(
+  const management = getManagementFromCache(
+    () =>
       Actor.createActor(managementIdlFactory, {
         canisterId: MANAGEMENT_CANISTER_ID,
         agent: createHttpAgent(identity),
-      })
-    );
-  }, [identity.getPrincipal().toText()]);
-
+      }),
+    [identity.getPrincipal().toText()]
+  );
   return { management };
 };
 
@@ -77,15 +76,13 @@ const createHttpAgent = (identity: Identity) => {
   return agent;
 };
 
+const getHttpAgentFromCache = memoize<HttpAgent>();
 export const useHttpAgent = () => {
   const { identity } = useIdentity();
-
-  const [httpAgent, setHttpAgent] = useState(createHttpAgent(identity));
-
-  useEffect(() => {
-    setHttpAgent(createHttpAgent(identity));
-  }, [identity.getPrincipal().toText()]);
-
+  const httpAgent = getHttpAgentFromCache(
+    () => createHttpAgent(identity),
+    [identity.getPrincipal().toText()]
+  );
   return httpAgent;
 };
 
@@ -134,7 +131,7 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
   );
 };
 
-export const useReadState = (canisterId: Principal) => {
+export const useReadState = (canisterId: Principal, enabled: boolean) => {
   const agent = useHttpAgent();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
@@ -197,6 +194,7 @@ export const useReadState = (canisterId: Principal) => {
       return data;
     },
     {
+      enabled,
       onError: () => {
         enqueueSnackbar("Failed to read the canister state", {
           variant: "error",
@@ -210,28 +208,16 @@ export const useCallerIsController = (
   canisterId: Principal,
   enabled: boolean
 ) => {
-  const { backend } = useHistoryBackend();
+  const { data, isFetching } = useReadState(canisterId, enabled);
+
   const { identity } = useIdentity();
-  const { enqueueSnackbar } = useSnackbar();
-  return useQuery(
-    [
-      "caller-is-controller",
-      canisterId.toString(),
-      identity.getPrincipal().toText(),
-    ],
-    () => backend.caller_is_controller(canisterId),
-    {
-      enabled,
-      onError: () => {
-        enqueueSnackbar(
-          "Failed to check if the caller is a canister controller",
-          {
-            variant: "error",
-          }
-        );
-      },
-    }
-  );
+
+  const userPrincipal = identity.getPrincipal().toText();
+
+  return {
+    callerIsController: (data?.controllers ?? []).includes(userPrincipal),
+    callerIsControllerLoading: isFetching,
+  };
 };
 
 export const useGetCanisterMetadata = (canisterId: Principal) => {

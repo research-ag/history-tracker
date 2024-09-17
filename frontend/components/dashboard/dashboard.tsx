@@ -49,17 +49,18 @@ const Dashboard = () => {
     remove: removeIsCanisterTracked,
   } = useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
 
-  const { data: callerIsController, remove: removeCallerIsController } =
-    useCallerIsController(canisterId_, isCanisterTracked ?? false);
+  const { callerIsController } = useCallerIsController(
+    canisterId_,
+    isCanisterTracked ?? false
+  );
 
   useCanisterStatus(canisterId_, callerIsController ?? false);
 
   useEffect(() => {
     return () => {
       removeIsCanisterTracked();
-      removeCallerIsController();
     };
-  }, [removeIsCanisterTracked, removeCallerIsController]);
+  }, [removeIsCanisterTracked]);
 
   if (isCanisterTrackedLoading) {
     return <LoadingPage />;

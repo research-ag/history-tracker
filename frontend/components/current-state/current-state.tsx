@@ -9,15 +9,15 @@ import { mapModuleHash } from "@fe/constants/knownHashes";
 const CurrentState = () => {
   const { canisterId } = useParams();
 
-  const { data, isFetching, remove, refetch } = useReadState(
-    Principal.fromText(canisterId!)
+  const { data, isFetching, refetch } = useReadState(
+    Principal.fromText(canisterId!),
+    true
   );
 
   return (
     <DashboardPageLayout
       title="State"
       onRefetch={() => {
-        remove();
         refetch();
       }}
       isFetching={isFetching}
