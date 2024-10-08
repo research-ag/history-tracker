@@ -12,8 +12,14 @@ import Prim "mo:prim";
 import IC "ic"
 
 module {
+  // For changes stored in our canister
   type ExtendedChange = IC.CanisterChange and {
     change_index : Nat;
+  };
+
+  // For public view of changes
+  type PublicChange = ExtendedChange and {
+    build_instructions : Text;
   };
 
   type ModuleHashMetadata = {
@@ -61,7 +67,7 @@ module {
   };
 
   public type CanisterChangesResponse = {
-    changes : [ExtendedChange];
+    changes : [PublicChange];
     total_num_changes : Nat64;
     timestamp_nanos : Nat64;
     sync_version : Nat;
@@ -178,7 +184,47 @@ module {
 
     public func canister_changes() : CanisterChangesResponse {
       internal_state.changes.entries()
-      |> Iter.map<(Nat, ExtendedChange), ExtendedChange>(_, func((_, v)) = v)
+      |> Iter.map<(Nat, ExtendedChange), PublicChange>(
+        _,
+        func((_, extended_change)) = {
+          extended_change with
+          build_instructions = switch (extended_change.details) {
+            case (#code_deployment(r)) {
+              let module_hash = Blob.toArray(r.module_hash);
+              let metadata = internal_state.metadata.module_hash_metadata;
+              switch (metadata.get(module_hash)) {
+                case (null) {
+                  // TODO: Reconsider the logic (when the times comes).
+                  //
+                  // ***
+                  //
+                  // It's expected that such a case is impossible.
+                  // Therefore, it's quite logical for us to throw trap here.
+                  //
+                  // However, it should be taken into account that there are canisters that
+                  // started to be tracked before the implementation of the module hash metadata.
+                  // So there could potentially be module hashes without a corresponding
+                  // metadata record created (they are created during synchronization
+                  // when new module hashes are found).
+                  //
+                  // Potential solutions: 
+                  // 1) Wipe state; // I think this one because anyway it should be reinstalled.
+                  // 2) Migration;
+                  // 3) Introduce a mechanism that allows to resync: go through all deployment changes
+                  //    and create the necessary metadata records.
+                  //
+
+                  // Debug.trap("internal error");
+
+                  "";
+                };
+                case (?v) v.build_instructions;
+              };
+            };
+            case (_) "";
+          };
+        },
+      )
       |> Iter.toArray(_)
       |> {
         changes = _;
