@@ -74,7 +74,7 @@ actor class HistoryTracker() = self {
     };
   };
 
-  public query func metadata(canister_id : Principal) : async CanisterHistory.SharedCanisterMetadata {
+  public query func metadata(canister_id : Principal) : async CanisterHistory.CanisterMetadataResponse {
     switch (history_storage_map.get(canister_id)) {
       case (null) throw Error.reject("The canister is not tracked.");
       case (?index) {

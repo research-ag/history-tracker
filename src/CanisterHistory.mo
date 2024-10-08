@@ -5,6 +5,8 @@ import Iter "mo:base/Iter";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
 import Array "mo:base/Array";
+import Debug "mo:base/Debug";
+import Blob "mo:base/Blob";
 import Prim "mo:prim";
 
 import IC "ic"
@@ -14,16 +16,16 @@ module {
     change_index : Nat;
   };
 
+  type ModuleHashMetadata = {
+    build_instructions : Text;
+  };
+
   type CanisterMetadata = {
     var name : Text;
     var description : Text;
     var latest_update_timestamp : Nat64;
-  };
-
-  public type SharedCanisterMetadata = {
-    name : Text;
-    description : Text;
-    latest_update_timestamp : Nat64;
+    module_hash_metadata : RBTree.RBTree<[Nat8], ModuleHashMetadata>;
+    module_hash_index : RBTree.RBTree<Nat64, [Nat8]>; // for sorting optimization
   };
 
   type InternalState = {
@@ -37,6 +39,14 @@ module {
     var metadata : CanisterMetadata;
   };
 
+  public type StableCanisterMetadata = {
+    name : Text;
+    description : Text;
+    latest_update_timestamp : Nat64;
+    module_hash_metadata : RBTree.Tree<[Nat8], ModuleHashMetadata>;
+    module_hash_index : RBTree.Tree<Nat64, [Nat8]>;
+  };
+
   public type StableData = {
     changes : RBTree.Tree<Nat, ExtendedChange>;
     latest_change_timestamp : Nat64;
@@ -45,7 +55,7 @@ module {
     controllers : [Principal];
     timestamp_nanos : Nat64;
     sync_version : Nat;
-    metadata : SharedCanisterMetadata;
+    metadata : StableCanisterMetadata;
     // * for remembering associated canister id
     canister_id : Principal;
   };
@@ -62,6 +72,18 @@ module {
     controllers : [Principal];
     timestamp_nanos : Nat64;
     sync_version : Nat;
+  };
+
+  public type PublicModuleHashMetadata = {
+    module_hash : [Nat8];
+    first_found_timestamp : Nat64;
+  } and ModuleHashMetadata;
+
+  public type CanisterMetadataResponse = {
+    name : Text;
+    description : Text;
+    latest_update_timestamp : Nat64;
+    module_hash_metadata : [PublicModuleHashMetadata];
   };
 
   public func fromStableData(data : StableData) : CanisterHistory {
@@ -84,6 +106,8 @@ module {
         var name = "";
         var description = "";
         var latest_update_timestamp = 0;
+        module_hash_metadata = RBTree.RBTree<[Nat8], ModuleHashMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
+        module_hash_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
       };
     };
 
@@ -107,6 +131,7 @@ module {
       // Merge untracked changes with already saved ones
       for (change in Iter.fromArray(info.recent_changes)) {
         if (change.timestamp_nanos > internal_state.latest_change_timestamp) {
+          // Insert new change to history
           internal_state.changes.put(
             cur_change_index,
             {
@@ -115,6 +140,24 @@ module {
             },
           );
           internal_state.latest_change_timestamp := change.timestamp_nanos;
+
+          // Insert new metadata item if the module hash is new
+          // (only applicable for deployment changes)
+          switch (change.details) {
+            case (#code_deployment(r)) {
+              let module_hash = Blob.toArray(r.module_hash);
+              let metadata = internal_state.metadata.module_hash_metadata;
+              let index = internal_state.metadata.module_hash_index;
+              switch (metadata.get(module_hash)) {
+                case (null) {
+                  metadata.put(module_hash, { build_instructions = "" });
+                  index.put(change.timestamp_nanos, module_hash);
+                };
+                case (?_) {};
+              };
+            };
+            case (_) {};
+          };
         };
         cur_change_index += 1;
       };
@@ -149,15 +192,38 @@ module {
       };
     };
 
-    public func metadata() : SharedCanisterMetadata {
+    public func metadata() : CanisterMetadataResponse {
+      let module_hash_metadata : [PublicModuleHashMetadata] = internal_state.metadata.module_hash_index.entries()
+      |> (
+        Iter.map(
+          _,
+          func(r : (Nat64, [Nat8])) : PublicModuleHashMetadata {
+            switch (internal_state.metadata.module_hash_metadata.get(r.1)) {
+              case (null) Debug.trap("internal error");
+              case (?v) {
+                {
+
+                  module_hash = r.1;
+                  first_found_timestamp = r.0;
+                  build_instructions = v.build_instructions;
+                };
+              };
+            };
+
+          },
+        )
+      )
+      |> Iter.toArray(_);
+
       {
         name = internal_state.metadata.name;
         description = internal_state.metadata.description;
         latest_update_timestamp = internal_state.metadata.latest_update_timestamp;
+        module_hash_metadata;
       };
     };
 
-    public func check_controller(p : Principal) : async* Bool {
+    func check_controller(p : Principal) : async* Bool {
       let info = try {
         await ic.canister_info({
           canister_id;
@@ -202,6 +268,8 @@ module {
           name = _.metadata.name;
           description = _.metadata.description;
           latest_update_timestamp = _.metadata.latest_update_timestamp;
+          module_hash_metadata = _.metadata.module_hash_metadata.share();
+          module_hash_index = _.metadata.module_hash_index.share();
         };
         canister_id;
       };
@@ -215,10 +283,19 @@ module {
       internal_state.controllers := data.controllers;
       internal_state.timestamp_nanos := data.timestamp_nanos;
       internal_state.sync_version := data.sync_version;
+
+      let module_hash_metadata = RBTree.RBTree<[Nat8], ModuleHashMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
+      module_hash_metadata.unshare(data.metadata.module_hash_metadata);
+
+      let module_hash_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
+      module_hash_index.unshare(data.metadata.module_hash_index);
+
       internal_state.metadata := {
         var name = data.metadata.name;
         var description = data.metadata.description;
         var latest_update_timestamp = data.metadata.latest_update_timestamp;
+        module_hash_metadata;
+        module_hash_index;
       };
     };
   };
