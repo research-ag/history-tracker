@@ -86,6 +86,11 @@ module {
     module_hash_metadata : [PublicModuleHashMetadata];
   };
 
+  public type UpdateModuleHashMetadataPayload = {
+    module_hash : [Nat8];
+    build_instructions : Text;
+  };
+
   public func fromStableData(data : StableData) : CanisterHistory {
     let history = CanisterHistory(data.canister_id);
     history.unshare(data);
@@ -252,6 +257,25 @@ module {
       };
 
       internal_state.metadata.latest_update_timestamp := Prim.time();
+    };
+
+    public func update_module_hash_metadata(caller : Principal, payload : UpdateModuleHashMetadataPayload) : async* () {
+      let is_controller = await* check_controller(caller);
+      if (not is_controller) throw Error.reject("Access denied.");
+
+      let metadata = internal_state.metadata.module_hash_metadata;
+      switch (metadata.get(payload.module_hash)) {
+        case (null) throw Error.reject("Metadata record for the provided module hash was not found.");
+        case (?metadata_record) {
+          metadata.put(
+            payload.module_hash,
+            {
+              metadata_record with
+              build_instructions = payload.build_instructions;
+            },
+          );
+        };
+      };
     };
 
     public func share() : StableData {
