@@ -18,15 +18,15 @@ module {
   };
 
   // For public view of changes
-  type PublicChange = ExtendedChange and {
+  public type PublicChange = ExtendedChange and {
     build_instructions : Text;
   };
 
-  type WasmMetadata = {
+  public type WasmMetadata = {
     build_instructions : Text;
   };
 
-  type CanisterMetadata = {
+  public type CanisterMetadata = {
     var name : Text;
     var description : Text;
     var latest_update_timestamp : Nat64;
@@ -103,6 +103,10 @@ module {
     history;
   };
 
+  func createWasmMetadata() : RBTree.RBTree<[Nat8], WasmMetadata> {
+    RBTree.RBTree<[Nat8], WasmMetadata>(func(a : [Nat8], b : [Nat8]) = Blob.compare(Blob.fromArray(a), Blob.fromArray(b)));
+  };
+
   public class CanisterHistory(canister_id : Principal) {
 
     let internal_state : InternalState = {
@@ -117,7 +121,7 @@ module {
         var name = "";
         var description = "";
         var latest_update_timestamp = 0;
-        wasm_metadata = RBTree.RBTree<[Nat8], WasmMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
+        wasm_metadata = createWasmMetadata();
         wasm_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
       };
     };
@@ -193,31 +197,7 @@ module {
               let module_hash = Blob.toArray(r.module_hash);
               let metadata = internal_state.metadata.wasm_metadata;
               switch (metadata.get(module_hash)) {
-                case (null) {
-                  // TODO: Reconsider the logic (when the times comes).
-                  //
-                  // ***
-                  //
-                  // It's expected that such a case is impossible.
-                  // Therefore, it's quite logical for us to throw trap here.
-                  //
-                  // However, it should be taken into account that there are canisters that
-                  // started to be tracked before the implementation of the module hash metadata.
-                  // So there could potentially be module hashes without a corresponding
-                  // metadata record created (they are created during synchronization
-                  // when new module hashes are found).
-                  //
-                  // Potential solutions:
-                  // 1) Wipe state; // I think this one because anyway it should be reinstalled.
-                  // 2) Migration;
-                  // 3) Introduce a mechanism that allows to resync: go through all deployment changes
-                  //    and create the necessary metadata records.
-                  //
-
-                  // Debug.trap("internal error");
-
-                  "";
-                };
+                case (null) Debug.trap("internal error");
                 case (?v) v.build_instructions;
               };
             };
@@ -354,7 +334,7 @@ module {
       internal_state.timestamp_nanos := data.timestamp_nanos;
       internal_state.sync_version := data.sync_version;
 
-      let wasm_metadata = RBTree.RBTree<[Nat8], WasmMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
+      let wasm_metadata = createWasmMetadata();
       wasm_metadata.unshare(data.metadata.wasm_metadata);
 
       let wasm_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
