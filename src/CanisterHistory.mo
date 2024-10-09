@@ -22,7 +22,7 @@ module {
     build_instructions : Text;
   };
 
-  type ModuleHashMetadata = {
+  type WasmMetadata = {
     build_instructions : Text;
   };
 
@@ -30,8 +30,8 @@ module {
     var name : Text;
     var description : Text;
     var latest_update_timestamp : Nat64;
-    module_hash_metadata : RBTree.RBTree<[Nat8], ModuleHashMetadata>;
-    module_hash_index : RBTree.RBTree<Nat64, [Nat8]>; // for sorting optimization
+    wasm_metadata : RBTree.RBTree<[Nat8], WasmMetadata>;
+    wasm_index : RBTree.RBTree<Nat64, [Nat8]>; // for sorting optimization
   };
 
   type InternalState = {
@@ -49,8 +49,8 @@ module {
     name : Text;
     description : Text;
     latest_update_timestamp : Nat64;
-    module_hash_metadata : RBTree.Tree<[Nat8], ModuleHashMetadata>;
-    module_hash_index : RBTree.Tree<Nat64, [Nat8]>;
+    wasm_metadata : RBTree.Tree<[Nat8], WasmMetadata>;
+    wasm_index : RBTree.Tree<Nat64, [Nat8]>;
   };
 
   public type StableData = {
@@ -80,19 +80,19 @@ module {
     sync_version : Nat;
   };
 
-  public type PublicModuleHashMetadata = {
+  public type PublicWasmMetadata = {
     module_hash : [Nat8];
     first_found_timestamp : Nat64;
-  } and ModuleHashMetadata;
+  } and WasmMetadata;
 
   public type CanisterMetadataResponse = {
     name : Text;
     description : Text;
     latest_update_timestamp : Nat64;
-    module_hash_metadata : [PublicModuleHashMetadata];
+    module_hash_metadata : [PublicWasmMetadata];
   };
 
-  public type UpdateModuleHashMetadataPayload = {
+  public type UpdateWasmMetadataPayload = {
     module_hash : [Nat8];
     build_instructions : Text;
   };
@@ -117,8 +117,8 @@ module {
         var name = "";
         var description = "";
         var latest_update_timestamp = 0;
-        module_hash_metadata = RBTree.RBTree<[Nat8], ModuleHashMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
-        module_hash_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
+        wasm_metadata = RBTree.RBTree<[Nat8], WasmMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
+        wasm_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
       };
     };
 
@@ -157,8 +157,8 @@ module {
           switch (change.details) {
             case (#code_deployment(r)) {
               let module_hash = Blob.toArray(r.module_hash);
-              let metadata = internal_state.metadata.module_hash_metadata;
-              let index = internal_state.metadata.module_hash_index;
+              let metadata = internal_state.metadata.wasm_metadata;
+              let index = internal_state.metadata.wasm_index;
               switch (metadata.get(module_hash)) {
                 case (null) {
                   metadata.put(module_hash, { build_instructions = "" });
@@ -191,7 +191,7 @@ module {
           build_instructions = switch (extended_change.details) {
             case (#code_deployment(r)) {
               let module_hash = Blob.toArray(r.module_hash);
-              let metadata = internal_state.metadata.module_hash_metadata;
+              let metadata = internal_state.metadata.wasm_metadata;
               switch (metadata.get(module_hash)) {
                 case (null) {
                   // TODO: Reconsider the logic (when the times comes).
@@ -207,7 +207,7 @@ module {
                   // metadata record created (they are created during synchronization
                   // when new module hashes are found).
                   //
-                  // Potential solutions: 
+                  // Potential solutions:
                   // 1) Wipe state; // I think this one because anyway it should be reinstalled.
                   // 2) Migration;
                   // 3) Introduce a mechanism that allows to resync: go through all deployment changes
@@ -244,12 +244,12 @@ module {
     };
 
     public func metadata() : CanisterMetadataResponse {
-      let module_hash_metadata : [PublicModuleHashMetadata] = internal_state.metadata.module_hash_index.entries()
+      let module_hash_metadata : [PublicWasmMetadata] = internal_state.metadata.wasm_index.entries()
       |> (
         Iter.map(
           _,
-          func(r : (Nat64, [Nat8])) : PublicModuleHashMetadata {
-            switch (internal_state.metadata.module_hash_metadata.get(r.1)) {
+          func(r : (Nat64, [Nat8])) : PublicWasmMetadata {
+            switch (internal_state.metadata.wasm_metadata.get(r.1)) {
               case (null) Debug.trap("internal error");
               case (?v) {
                 {
@@ -305,11 +305,11 @@ module {
       internal_state.metadata.latest_update_timestamp := Prim.time();
     };
 
-    public func update_module_hash_metadata(caller : Principal, payload : UpdateModuleHashMetadataPayload) : async* () {
+    public func update_wasm_metadata(caller : Principal, payload : UpdateWasmMetadataPayload) : async* () {
       let is_controller = await* check_controller(caller);
       if (not is_controller) throw Error.reject("Access denied.");
 
-      let metadata = internal_state.metadata.module_hash_metadata;
+      let metadata = internal_state.metadata.wasm_metadata;
       switch (metadata.get(payload.module_hash)) {
         case (null) throw Error.reject("Metadata record for the provided module hash was not found.");
         case (?metadata_record) {
@@ -338,8 +338,8 @@ module {
           name = _.metadata.name;
           description = _.metadata.description;
           latest_update_timestamp = _.metadata.latest_update_timestamp;
-          module_hash_metadata = _.metadata.module_hash_metadata.share();
-          module_hash_index = _.metadata.module_hash_index.share();
+          wasm_metadata = _.metadata.wasm_metadata.share();
+          wasm_index = _.metadata.wasm_index.share();
         };
         canister_id;
       };
@@ -354,18 +354,18 @@ module {
       internal_state.timestamp_nanos := data.timestamp_nanos;
       internal_state.sync_version := data.sync_version;
 
-      let module_hash_metadata = RBTree.RBTree<[Nat8], ModuleHashMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
-      module_hash_metadata.unshare(data.metadata.module_hash_metadata);
+      let wasm_metadata = RBTree.RBTree<[Nat8], WasmMetadata>(func(a : [Nat8], b : [Nat8]) = #equal);
+      wasm_metadata.unshare(data.metadata.wasm_metadata);
 
-      let module_hash_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
-      module_hash_index.unshare(data.metadata.module_hash_index);
+      let wasm_index = RBTree.RBTree<Nat64, [Nat8]>(Nat64.compare);
+      wasm_index.unshare(data.metadata.wasm_index);
 
       internal_state.metadata := {
         var name = data.metadata.name;
         var description = data.metadata.description;
         var latest_update_timestamp = data.metadata.latest_update_timestamp;
-        module_hash_metadata;
-        module_hash_index;
+        wasm_metadata;
+        wasm_index;
       };
     };
   };

@@ -94,12 +94,12 @@ actor class HistoryTracker() = self {
     };
   };
 
-  public shared ({ caller }) func update_module_hash_metadata(canister_id : Principal, payload : CanisterHistory.UpdateModuleHashMetadataPayload) : async () {
+  public shared ({ caller }) func update_wasm_metadata(canister_id : Principal, payload : CanisterHistory.UpdateWasmMetadataPayload) : async () {
     switch (history_storage_map.get(canister_id)) {
       case (null) throw Error.reject("The canister is not tracked.");
       case (?index) {
         let history = history_storage.get(index);
-        await* history.update_module_hash_metadata(caller, payload);
+        await* history.update_wasm_metadata(caller, payload);
       };
     };
   };
