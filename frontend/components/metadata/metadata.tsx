@@ -2,11 +2,21 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Box, Button, LinearProgress, Typography } from "@mui/joy";
+import {
+  Box,
+  Tabs,
+  TabList,
+  Tab,
+  Button,
+  LinearProgress,
+  Typography,
+} from "@mui/joy";
 
 import { useGetCanisterMetadata } from "@fe/integration";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 
+import CanisterMetadata from "./canister-metadata";
+import WasmMetadata from "./wasm-metadata";
 import UpdateMetadataModal from "./update-metadata-modal";
 
 interface MetadataProps {
@@ -15,6 +25,8 @@ interface MetadataProps {
 
 const Metadata = ({ callerIsController }: MetadataProps) => {
   const { canisterId } = useParams();
+
+  const [tabValue, setTabValue] = useState(0);
 
   const [modalIsOpen, setModalIsOpen] = useState(false);
   const openModal = () => setModalIsOpen(true);
@@ -59,14 +71,22 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
                 )
               : "Not updated"}
           </Typography>
-          <Box sx={{ marginBottom: 1 }}>
-            <Box sx={{ display: "inline", fontWeight: 600 }}>Name:</Box>{" "}
-            <Box sx={{ display: "inline" }}>{data.name}</Box>
-          </Box>
-          <Box>
-            <Box sx={{ display: "inline", fontWeight: 600 }}>Description:</Box>{" "}
-            <Box sx={{ display: "inline" }}>{data.description}</Box>
-          </Box>
+          <Tabs
+            sx={{ backgroundColor: "transparent" }}
+            value={tabValue}
+            onChange={(_, value) => setTabValue(value as number)}
+          >
+            <TabList
+              sx={{ flexGrow: 1, marginBottom: 1 }}
+              variant="plain"
+              size="sm"
+            >
+              <Tab color="neutral">Canister</Tab>
+              <Tab color="neutral">Wasm modules</Tab>
+            </TabList>
+          </Tabs>
+          {tabValue === 0 && <CanisterMetadata data={data} />}
+          {tabValue === 1 && <WasmMetadata data={data} />}
           <UpdateMetadataModal
             canisterId={Principal.fromText(canisterId!)}
             metadata={data}

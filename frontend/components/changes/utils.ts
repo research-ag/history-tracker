@@ -1,13 +1,13 @@
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { PublicChange } from "@declarations/history_be/history_be.did";
 
 export const addGaps = (
-  changes: Array<ExtendedChange>
-): Array<ExtendedChange | number> => {
+  changes: Array<PublicChange>
+): Array<PublicChange | number> => {
   if (changes.length < 2) {
     return [...changes];
   }
 
-  let changesWithGaps: Array<ExtendedChange | number> = [];
+  let changesWithGaps: Array<PublicChange | number> = [];
 
   changesWithGaps.push(changes[0]);
 
@@ -28,7 +28,7 @@ export const addGaps = (
 };
 
 export const creationExists = (
-  changes: Array<ExtendedChange> // sorted by ascending indexes
+  changes: Array<PublicChange> // sorted by ascending indexes
 ): boolean => !!changes[0] && Number(changes[0].canister_version) === 0;
 
 export interface NumberOfResetsResult {
@@ -50,7 +50,7 @@ export interface NumberOfResetsResult {
  * - default case: unknown (>= installs - 1)
  */
 export const getNumberOfResets = (
-  changes: Array<ExtendedChange> // sorted by ascending indexes
+  changes: Array<PublicChange> // sorted by ascending indexes
 ): NumberOfResetsResult => {
   const installs = changes.reduce<number>((acc, change) => {
     if ("code_deployment" in change.details) {
@@ -103,7 +103,7 @@ export const getNumberOfResets = (
 };
 
 export const gapsExist = (
-  changes: Array<ExtendedChange> // sorted by ascending indexes
+  changes: Array<PublicChange> // sorted by ascending indexes
 ) => {
   if (changes.length < 2) return false;
   for (let i = 1; i < changes.length; i++) {
@@ -125,7 +125,7 @@ export type HistorySummary = "complete" | "incomplete" | "gaps";
  * 3. creation change exists: "complete"
  */
 export const getSummarySinceCreation = (
-  changes: Array<ExtendedChange> // sorted by ascending indexes
+  changes: Array<PublicChange> // sorted by ascending indexes
 ): HistorySummary => {
   if (gapsExist(changes)) return "gaps";
   if (!creationExists(changes)) return "incomplete";
@@ -143,9 +143,9 @@ export const getSummarySinceCreation = (
  * 3. install change exists: "complete"
  */
 export const getSummarySinceLastReset = (
-  changes_: Array<ExtendedChange> // sorted by ascending indexes
+  changes_: Array<PublicChange> // sorted by ascending indexes
 ): "complete" | "incomplete" | "gaps" => {
-  var changes: Array<ExtendedChange> = [...changes_];
+  var changes: Array<PublicChange> = [...changes_];
 
   let baseIndex = changes.findLastIndex((change) => {
     if ("code_deployment" in change.details) {

@@ -1,11 +1,11 @@
 import { Box } from "@mui/joy";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { PublicChange } from "@declarations/history_be/history_be.did";
 
-import ItemWithDetails from "./item-with-details";
+import ItemWithDetails from "../item-with-details";
 
 interface OriginCellProps {
-  change: ExtendedChange;
+  change: PublicChange;
 }
 
 const OriginCell = ({ change }: OriginCellProps) => {

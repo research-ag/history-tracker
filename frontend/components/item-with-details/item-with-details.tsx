@@ -5,10 +5,16 @@ import { Box, IconButton, Tooltip, Typography } from "@mui/joy";
 interface ItemWithDetailsProps {
   title: string;
   hash?: string;
+  titleIsHash?: boolean;
   details: React.ReactNode | null;
 }
 
-const ItemWithDetails = ({ title, hash, details }: ItemWithDetailsProps) => {
+const ItemWithDetails = ({
+  title,
+  hash,
+  titleIsHash,
+  details,
+}: ItemWithDetailsProps) => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -19,8 +25,14 @@ const ItemWithDetails = ({ title, hash, details }: ItemWithDetailsProps) => {
             {open ? <ArrowUpward /> : <ArrowDownward />}
           </IconButton>
         )}
-        {title}{" "}
-        {hash && (
+        <Tooltip
+          title={
+            hash && titleIsHash && <Box sx={{ width: "240px" }}>{hash}</Box>
+          }
+        >
+          <Typography sx={{ display: "inline" }}>{title} </Typography>
+        </Tooltip>
+        {hash && !titleIsHash && (
           <Tooltip title={<Box sx={{ width: "240px" }}>{hash}</Box>}>
             <Typography sx={{ display: "inline" }}>
               ({hash.slice(0, 7)})

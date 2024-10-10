@@ -1,13 +1,13 @@
 import { Box } from "@mui/joy";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { PublicChange } from "@declarations/history_be/history_be.did";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 import { getSHA256Hash } from "@fe/utils/hash";
 
-import ItemWithDetails from "./item-with-details";
+import ItemWithDetails from "../item-with-details";
 
 interface ActionCellProps {
-  change: ExtendedChange;
+  change: PublicChange;
 }
 
 const ActionCell = ({ change }: ActionCellProps) => {

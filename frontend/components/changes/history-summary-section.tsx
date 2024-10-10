@@ -1,6 +1,6 @@
 import { Box, Typography } from "@mui/joy";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { PublicChange } from "@declarations/history_be/history_be.did";
 
 import {
   getNumberOfResets,
@@ -10,7 +10,7 @@ import {
 } from "./utils";
 
 interface HistorySummarySectionProps {
-  changes?: Array<ExtendedChange>;
+  changes?: Array<PublicChange>;
 }
 
 const HistorySummarySection = ({ changes }: HistorySummarySectionProps) => {

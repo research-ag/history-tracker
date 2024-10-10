@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { Box, Tabs, TabList, Tab, Button, Typography } from "@mui/joy";
