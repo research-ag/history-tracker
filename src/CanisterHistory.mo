@@ -224,7 +224,7 @@ module {
     };
 
     public func metadata() : CanisterMetadataResponse {
-      let module_hash_metadata : [PublicWasmMetadata] = internal_state.metadata.wasm_index.entries()
+      let module_hash_metadata : [PublicWasmMetadata] = internal_state.metadata.wasm_index.entriesRev()
       |> (
         Iter.map(
           _,
