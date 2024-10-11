@@ -20,7 +20,7 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
   const openModal = () => setModalIsOpen(true);
   const closeModal = () => setModalIsOpen(false);
 
-  const { data, isFetching, remove, refetch } = useGetCanisterMetadata(
+  const { data, isFetching, refetch } = useGetCanisterMetadata(
     Principal.fromText(canisterId!)
   );
 
@@ -40,7 +40,6 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
         ) : undefined
       }
       onRefetch={() => {
-        remove();
         refetch();
       }}
       isFetching={isFetching}

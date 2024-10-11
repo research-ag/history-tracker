@@ -12,14 +12,15 @@ import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
 import LoadingPage from "@fe/components/loading-page";
 import ErrorLayout from "@fe/components/error-layout";
+import InfoItem from "@fe/components/info-item";
 import { useIdentity } from "@fe/integration/identity";
 import {
+  BACKEND_CANISTER_ID,
   useGetIsCanisterTracked,
   useCallerIsController,
   useCanisterStatus,
 } from "@fe/integration";
 
-import InfoItem from "./info-item";
 import { useTabManagement } from "./tabs-management";
 
 const Dashboard = () => {
@@ -48,17 +49,18 @@ const Dashboard = () => {
     remove: removeIsCanisterTracked,
   } = useGetIsCanisterTracked(canisterId_, isCanisterIdValid);
 
-  const { data: callerIsController, remove: removeCallerIsController } =
-    useCallerIsController(canisterId_, isCanisterTracked ?? false);
+  const { callerIsController } = useCallerIsController(
+    canisterId_,
+    isCanisterTracked ?? false
+  );
 
   useCanisterStatus(canisterId_, callerIsController ?? false);
 
   useEffect(() => {
     return () => {
       removeIsCanisterTracked();
-      removeCallerIsController();
     };
-  }, [removeIsCanisterTracked, removeCallerIsController]);
+  }, [removeIsCanisterTracked]);
 
   if (isCanisterTrackedLoading) {
     return <LoadingPage />;
@@ -106,6 +108,11 @@ const Dashboard = () => {
               </Typography>
             )}
             <InfoItem label="Your principal" content={userPrincipal} withCopy />
+            <InfoItem
+              label="Backend canister ID"
+              content={BACKEND_CANISTER_ID}
+              withCopy
+            />
             <InfoItem
               label="Watched canister ID"
               content={canisterId!}

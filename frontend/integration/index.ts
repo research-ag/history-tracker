@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
@@ -18,53 +17,51 @@ import { _SERVICE } from "@declarations/history_be/history_be.did";
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
 import { useIdentity } from "./identity";
-import { arrayBufferToHex } from "./utils";
+import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
 
-export const useHistoryBackend = (() => {
-  let backend: ActorSubclass<_SERVICE>;
-  let prevIdentity: string;
-  return () => {
-    const { identity } = useIdentity();
+const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
+  const map: Record<string, R> = {};
+  return (fn: () => R, deps: any[]): R => {
+    const depsKey = JSON.stringify(deps);
 
-    if (prevIdentity !== identity.getPrincipal().toText()) {
-      backend = createActor(canisterId, {
+    if (!map[depsKey]) {
+      map[depsKey] = fn();
+    }
+
+    return map[depsKey];
+  };
+};
+
+const getBackendFromCache = memoize<ActorSubclass<_SERVICE>>();
+export const useHistoryBackend = () => {
+  const { identity } = useIdentity();
+  const backend = getBackendFromCache(
+    () =>
+      createActor(canisterId, {
         agentOptions: {
           identity,
           verifyQuerySignatures: false,
         },
-      });
-      prevIdentity = identity.getPrincipal().toText();
-    }
-
-    return { backend };
-  };
-})();
-
-export const useManagementCanister = (effectiveCanisterId: Principal) => {
-  const { identity } = useIdentity();
-  const [management, setManagement] = useState<
-    ActorSubclass<MANAGEMENT_SERVICE>
-  >(
-    Actor.createActor(managementIdlFactory, {
-      canisterId: MANAGEMENT_CANISTER_ID,
-      agent: createHttpAgent(identity),
-      effectiveCanisterId,
-    })
+      }),
+    [identity.getPrincipal().toText()]
   );
+  return { backend };
+};
 
-  useEffect(() => {
-    setManagement(
+const getManagementFromCache = memoize<ActorSubclass<MANAGEMENT_SERVICE>>();
+export const useManagementCanister = () => {
+  const { identity } = useIdentity();
+  const management = getManagementFromCache(
+    () =>
       Actor.createActor(managementIdlFactory, {
         canisterId: MANAGEMENT_CANISTER_ID,
         agent: createHttpAgent(identity),
-        effectiveCanisterId,
-      })
-    );
-  }, [identity.getPrincipal().toText(), effectiveCanisterId.toText()]);
-
+      }),
+    [identity.getPrincipal().toText()]
+  );
   return { management };
 };
 
@@ -79,15 +76,13 @@ const createHttpAgent = (identity: Identity) => {
   return agent;
 };
 
+const getHttpAgentFromCache = memoize<HttpAgent>();
 export const useHttpAgent = () => {
   const { identity } = useIdentity();
-
-  const [httpAgent, setHttpAgent] = useState(createHttpAgent(identity));
-
-  useEffect(() => {
-    setHttpAgent(createHttpAgent(identity));
-  }, [identity.getPrincipal().toText()]);
-
+  const httpAgent = getHttpAgentFromCache(
+    () => createHttpAgent(identity),
+    [identity.getPrincipal().toText()]
+  );
   return httpAgent;
 };
 
@@ -136,7 +131,7 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
   );
 };
 
-export const useReadState = (canisterId: Principal) => {
+export const useReadState = (canisterId: Principal, enabled: boolean) => {
   const agent = useHttpAgent();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
@@ -199,6 +194,7 @@ export const useReadState = (canisterId: Principal) => {
       return data;
     },
     {
+      enabled,
       onError: () => {
         enqueueSnackbar("Failed to read the canister state", {
           variant: "error",
@@ -212,28 +208,16 @@ export const useCallerIsController = (
   canisterId: Principal,
   enabled: boolean
 ) => {
-  const { backend } = useHistoryBackend();
+  const { data, isFetching } = useReadState(canisterId, enabled);
+
   const { identity } = useIdentity();
-  const { enqueueSnackbar } = useSnackbar();
-  return useQuery(
-    [
-      "caller-is-controller",
-      canisterId.toString(),
-      identity.getPrincipal().toText(),
-    ],
-    () => backend.caller_is_controller(canisterId),
-    {
-      enabled,
-      onError: () => {
-        enqueueSnackbar(
-          "Failed to check if the caller is a canister controller",
-          {
-            variant: "error",
-          }
-        );
-      },
-    }
-  );
+
+  const userPrincipal = identity.getPrincipal().toText();
+
+  return {
+    callerIsController: (data?.controllers ?? []).includes(userPrincipal),
+    callerIsControllerLoading: isFetching,
+  };
 };
 
 export const useGetCanisterMetadata = (canisterId: Principal) => {
@@ -289,14 +273,55 @@ export const useUpdateCanisterMetadata = () => {
 };
 
 export const useCanisterStatus = (canisterId: Principal, enabled: boolean) => {
-  const { management } = useManagementCanister(canisterId);
+  const { management } = useManagementCanister();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-status", canisterId.toString()],
-    () => management.canister_status({ canister_id: canisterId }),
+    () =>
+      management.canister_status.withOptions({
+        effectiveCanisterId: canisterId,
+      })({ canister_id: canisterId }),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister status", {
+          variant: "error",
+        });
+      },
+      enabled,
+    }
+  );
+};
+
+export interface MappedCanisterLogRecord {
+  content: string;
+  idx: number;
+  timestamp_nanos: bigint;
+}
+
+export const useFetchCanisterLogs = (
+  canisterId: Principal,
+  enabled: boolean
+) => {
+  const { management } = useManagementCanister();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    ["canister-logs", canisterId.toString()],
+    async (): Promise<MappedCanisterLogRecord[]> => {
+      const data = await management.fetch_canister_logs.withOptions({
+        effectiveCanisterId: canisterId,
+      })({
+        canister_id: canisterId,
+      });
+
+      return data.canister_log_records.map((record) => ({
+        idx: Number(record.idx),
+        timestamp_nanos: record.timestamp_nanos,
+        content: parseUint8ArrayToText(record.content as Uint8Array),
+      }));
+    },
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the canister logs", {
           variant: "error",
         });
       },

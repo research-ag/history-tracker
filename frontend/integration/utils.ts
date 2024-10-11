@@ -9,3 +9,8 @@ export const arrayBufferToHex = (buffer: ArrayBuffer): string => {
 
   return hexParts.join("");
 };
+
+export const parseUint8ArrayToText = (data: ArrayBuffer): string => {
+  const decoder = new TextDecoder("utf-8");
+  return decoder.decode(data);
+};
