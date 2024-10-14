@@ -7,17 +7,18 @@ import {
   FormLabel,
   Typography,
 } from "@mui/joy";
+import MDEditor from "@uiw/react-md-editor";
 
-import { CanisterMetadataResponse } from "@declarations/history_be/history_be.did";
+import { PublicWasmMetadata } from "@declarations/history_be/history_be.did";
 
 interface ViewWasmMetadataModalProps {
-  metadata: CanisterMetadataResponse;
+  wasmMetadata: PublicWasmMetadata | null;
   isOpen: boolean;
   onClose: () => void;
 }
 
 const ViewWasmMetadataModal = ({
-  metadata,
+  wasmMetadata,
   isOpen,
   onClose,
 }: ViewWasmMetadataModalProps) => {
@@ -29,7 +30,11 @@ const ViewWasmMetadataModal = ({
         <Box>
           <FormControl>
             <FormLabel>Build instructions</FormLabel>
-            Here text
+            {wasmMetadata?.build_instructions ? (
+              <MDEditor.Markdown source={wasmMetadata.build_instructions} />
+            ) : (
+              <Box sx={{ opacity: 0.4 }}>Empty</Box>
+            )}
           </FormControl>
         </Box>
       </ModalDialog>

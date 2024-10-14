@@ -12,7 +12,10 @@ import {
 import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
-import { _SERVICE } from "@declarations/history_be/history_be.did";
+import {
+  _SERVICE,
+  UpdateWasmMetadataPayload,
+} from "@declarations/history_be/history_be.did";
 
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
@@ -265,6 +268,36 @@ export const useUpdateCanisterMetadata = () => {
       },
       onError: () => {
         enqueueSnackbar("Failed to update the canister metadata", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface UpdateWasmMetadataExtendedPayload extends UpdateWasmMetadataPayload {
+  canisterId: Principal;
+}
+
+export const useUpdateWasmMetadata = () => {
+  const { backend } = useHistoryBackend();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(
+    ({ canisterId, ...payload }: UpdateWasmMetadataExtendedPayload) =>
+      backend.update_wasm_metadata(canisterId, payload),
+    {
+      onSuccess: (_, { canisterId }) => {
+        queryClient.invalidateQueries([
+          "canister-metadata",
+          canisterId.toString(),
+        ]);
+        enqueueSnackbar("The Wasm metadata has been successfully updated", {
+          variant: "success",
+        });
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to update the Wasm metadata", {
           variant: "error",
         });
       },

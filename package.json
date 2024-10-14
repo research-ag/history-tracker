@@ -36,6 +36,7 @@
     "@mui/icons-material": "^5.15.10",
     "@mui/joy": "^5.0.0-beta.28",
     "@mui/material": "^5.15.10",
+    "@uiw/react-md-editor": "^4.0.4",
     "cborg": "^4.2.3",
     "crypto-js": "^4.2.0",
     "date-fns": "^3.3.1",

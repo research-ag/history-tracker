@@ -86,7 +86,13 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
             </TabList>
           </Tabs>
           {tabValue === 0 && <CanisterMetadata data={data} />}
-          {tabValue === 1 && <WasmMetadata data={data} />}
+          {tabValue === 1 && (
+            <WasmMetadata
+              canisterId={Principal.fromText(canisterId!)}
+              data={data}
+              callerIsController={callerIsController}
+            />
+          )}
           <UpdateMetadataModal
             canisterId={Principal.fromText(canisterId!)}
             metadata={data}

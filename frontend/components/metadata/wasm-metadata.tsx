@@ -1,23 +1,37 @@
 import { useState } from "react";
 import { Box, Table, IconButton, Tooltip } from "@mui/joy";
 import { format } from "date-fns";
+import { Principal } from "@dfinity/principal";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import EditIcon from "@mui/icons-material/Edit";
 
-import { CanisterMetadataResponse } from "@declarations/history_be/history_be.did";
+import {
+  CanisterMetadataResponse,
+  PublicWasmMetadata,
+} from "@declarations/history_be/history_be.did";
 import { getSHA256Hash } from "@fe/utils/hash";
 import ItemWithDetails from "@fe/components/item-with-details";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 
 import ViewWasmMetadataModal from "./view-wasm-metadata";
+import UpdateWasmMetadataModal from "./update-wasm-metadata-modal";
 
 interface WasmMetadataProps {
+  canisterId: Principal;
   data: CanisterMetadataResponse;
+  callerIsController: boolean;
 }
 
-const WasmMetadata = ({ data }: WasmMetadataProps) => {
-  console.log("=== data", data);
-  const [viewModalIsOpen, setViewModalIsOpen] = useState(false);
+const WasmMetadata = ({
+  canisterId,
+  data,
+  callerIsController,
+}: WasmMetadataProps) => {
+  const [wasmMetadataToView, setWasmMetadataToView] =
+    useState<PublicWasmMetadata | null>(null);
+
+  const [wasmMetadataToEdit, setWasmMetadataToEdit] =
+    useState<PublicWasmMetadata | null>(null);
 
   return (
     <Box>
@@ -85,7 +99,13 @@ const WasmMetadata = ({ data }: WasmMetadataProps) => {
                   />
                 }
               </td>
-              <td>
+              <td
+                style={{
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
                 {record.build_instructions ? (
                   record.build_instructions
                 ) : (
@@ -97,15 +117,26 @@ const WasmMetadata = ({ data }: WasmMetadataProps) => {
                   <Tooltip title="View Wasm metadata">
                     <IconButton
                       onClick={() => {
-                        setViewModalIsOpen(true);
+                        setWasmMetadataToView(record);
                       }}
                     >
                       <VisibilityIcon />
                     </IconButton>
                   </Tooltip>
-                  <Tooltip title="Edit Wasm metadata">
+                  <Tooltip
+                    title={
+                      callerIsController
+                        ? "Edit Wasm metadata"
+                        : "You have to be a controller for editing"
+                    }
+                  >
                     <Box>
-                      <IconButton>
+                      <IconButton
+                        onClick={() => {
+                          setWasmMetadataToEdit(record);
+                        }}
+                        disabled={!callerIsController}
+                      >
                         <EditIcon />
                       </IconButton>
                     </Box>
@@ -117,10 +148,18 @@ const WasmMetadata = ({ data }: WasmMetadataProps) => {
         </tbody>
       </Table>
       <ViewWasmMetadataModal
-        metadata={data}
-        isOpen={viewModalIsOpen}
+        wasmMetadata={wasmMetadataToView}
+        isOpen={!!wasmMetadataToView}
         onClose={() => {
-          setViewModalIsOpen(false);
+          setWasmMetadataToView(null);
+        }}
+      />
+      <UpdateWasmMetadataModal
+        canisterId={canisterId}
+        wasmMetadata={wasmMetadataToEdit}
+        isOpen={!!wasmMetadataToEdit}
+        onClose={() => {
+          setWasmMetadataToEdit(null);
         }}
       />
     </Box>
