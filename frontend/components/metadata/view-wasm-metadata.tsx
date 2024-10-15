@@ -24,14 +24,24 @@ const ViewWasmMetadataModal = ({
 }: ViewWasmMetadataModalProps) => {
   return (
     <Modal open={isOpen} onClose={onClose}>
-      <ModalDialog sx={{ width: "calc(100% - 50px)", maxWidth: "450px" }}>
+      <ModalDialog sx={{ width: "calc(100% - 50px)", maxWidth: "700px" }}>
         <ModalClose />
         <Typography level="h4">View Wasm metadata</Typography>
         <Box>
           <FormControl>
             <FormLabel>Build instructions</FormLabel>
             {wasmMetadata?.build_instructions ? (
-              <MDEditor.Markdown source={wasmMetadata.build_instructions} />
+              <Box
+                sx={{
+                  border: (theme) =>
+                    `1px solid ${theme.palette.primary.outlinedBorder}`,
+                }}
+              >
+                <MDEditor.Markdown
+                  style={{ padding: "8px" }}
+                  source={wasmMetadata.build_instructions}
+                />
+              </Box>
             ) : (
               <Box sx={{ opacity: 0.4 }}>Empty</Box>
             )}

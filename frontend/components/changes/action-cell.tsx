@@ -1,4 +1,4 @@
-import { Box } from "@mui/joy";
+import { Box, Button } from "@mui/joy";
 
 import { PublicChange } from "@declarations/history_be/history_be.did";
 import { mapModuleHash } from "@fe/constants/knownHashes";
@@ -8,9 +8,10 @@ import ItemWithDetails from "../item-with-details";
 
 interface ActionCellProps {
   change: PublicChange;
+  onViewBuildInstructions: (change: PublicChange) => void;
 }
 
-const ActionCell = ({ change }: ActionCellProps) => {
+const ActionCell = ({ change, onViewBuildInstructions }: ActionCellProps) => {
   if ("creation" in change.details)
     return (
       <ItemWithDetails
@@ -65,6 +66,30 @@ const ActionCell = ({ change }: ActionCellProps) => {
                   Module hash is known:
                 </Box>{" "}
                 {mapModuleHash(moduleHash)}
+              </Box>
+            )}
+            {change.build_instructions ? (
+              <Box sx={{ marginTop: "8px" }}>
+                <Button
+                  onClick={() => {
+                    onViewBuildInstructions(change);
+                  }}
+                  size="sm"
+                >
+                  Build instructions
+                </Button>
+              </Box>
+            ) : (
+              <Box>
+                <Box
+                  sx={{
+                    display: "inline",
+                    fontWeight: 600,
+                  }}
+                >
+                  Build instructions:
+                </Box>{" "}
+                None
               </Box>
             )}
           </Box>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
@@ -7,12 +7,14 @@ import { Alert, Box, LinearProgress, Table, useTheme } from "@mui/joy";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { useGetCanisterChanges, useReadState } from "@fe/integration";
 import { getSHA256Hash } from "@fe/utils/hash";
+import { PublicChange } from "@declarations/history_be/history_be.did";
 
 import HistorySummarySection from "./history-summary-section";
 import HistoryInfoLine from "./history-info-line";
 import GapsRowContent from "./gap-row-content";
 import ActionCell from "./action-cell";
 import OriginCell from "./origin-cell";
+import ViewBuildInstructionsModal from "./view-build-instructions-modal";
 import { addGaps } from "./utils";
 
 const Changes = () => {
@@ -23,6 +25,9 @@ const Changes = () => {
   const { data, isFetching, refetch } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
+
+  // change to view build instructions
+  const [changeToView, setChangeToView] = useState<PublicChange | null>(null);
 
   const { data: { moduleHash: actualModuleHash } = { moduleHash: "" } } =
     useReadState(Principal.fromText(canisterId!), true);
@@ -122,8 +127,17 @@ const Changes = () => {
                       <tr key={change.timestamp_nanos}>
                         <td>{Number(change.change_index)}</td>
                         <td>{Number(change.canister_version)}</td>
-                        <td>{<ActionCell change={change} />}</td>
-                        <td>{<OriginCell change={change} />}</td>
+                        <td>
+                          <ActionCell
+                            change={change}
+                            onViewBuildInstructions={(change) => {
+                              setChangeToView(change);
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <OriginCell change={change} />
+                        </td>
                         <td>
                           {format(
                             new Date(
@@ -139,6 +153,13 @@ const Changes = () => {
             </Table>
           </>
         )}
+        <ViewBuildInstructionsModal
+          buildInstructions={changeToView?.build_instructions ?? ""}
+          isOpen={!!changeToView}
+          onClose={() => {
+            setChangeToView(null);
+          }}
+        />
       </Box>
     </DashboardPageLayout>
   );

@@ -39,7 +39,7 @@ const WasmMetadata = ({
         <colgroup>
           <col style={{ width: "40px" }} />
           <col style={{ width: "160px" }} />
-          <col style={{ width: "160px" }} />
+          <col style={{ width: "200px" }} />
           <col />
           <col style={{ width: "100px" }} />
         </colgroup>
