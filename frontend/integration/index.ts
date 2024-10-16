@@ -40,42 +40,41 @@ const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
 
 const getBackendFromCache = memoize<ActorSubclass<_SERVICE>>();
 export const useHistoryBackend = () => {
-  const { identity } = useIdentity();
+  const httpAgent = useHttpAgent();
   const backend = getBackendFromCache(
-    () =>
-      createActor(canisterId, {
-        agentOptions: {
-          identity,
-          verifyQuerySignatures: false,
-        },
-      }),
-    [identity.getPrincipal().toText()]
+    () => createActor(canisterId, { agent: httpAgent }),
+    [httpAgent]
   );
   return { backend };
 };
 
 const getManagementFromCache = memoize<ActorSubclass<MANAGEMENT_SERVICE>>();
 export const useManagementCanister = () => {
-  const { identity } = useIdentity();
+  const httpAgent = useHttpAgent();
   const management = getManagementFromCache(
     () =>
       Actor.createActor(managementIdlFactory, {
         canisterId: MANAGEMENT_CANISTER_ID,
-        agent: createHttpAgent(identity),
+        agent: httpAgent,
       }),
-    [identity.getPrincipal().toText()]
+    [httpAgent]
   );
   return { management };
 };
 
 const createHttpAgent = (identity: Identity) => {
-  const agent = new HttpAgent({ identity, verifyQuerySignatures: false });
-  agent.fetchRootKey().catch((err) => {
-    console.warn(
-      "Unable to fetch root key. Check to ensure that your local replica is running"
-    );
-    console.error(err);
+  const agent = HttpAgent.createSync({
+    identity,
+    verifyQuerySignatures: false,
   });
+  if (process.env.DFX_NETWORK !== "ic") {
+    agent.fetchRootKey().catch((err) => {
+      console.warn(
+        "Unable to fetch root key. Check to ensure that your local replica is running"
+      );
+      console.error(err);
+    });
+  }
   return agent;
 };
 
