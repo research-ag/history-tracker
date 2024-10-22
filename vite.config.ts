@@ -8,9 +8,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export default defineConfig({
-  root: "frontend",
+  root: "src/history_fe",
   build: {
-    outDir: "../dist",
+    outDir: "../../dist",
     emptyOutDir: true,
   },
   optimizeDeps: {

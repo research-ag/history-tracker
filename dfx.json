@@ -1,7 +1,7 @@
 {
   "canisters": {
     "history_be": {
-      "main": "./src/main.mo",
+      "main": "./src/history_be/main.mo",
       "type": "motoko",
       "declarations": {
         "bindings": ["js", "ts"],
