@@ -1,5 +1,13 @@
 {
   "canisters": {
+    "cmm_be": {
+      "main": "./src/cmm_be/main.mo",
+      "type": "motoko",
+      "declarations": {
+        "bindings": ["js", "ts"],
+        "output": "./declarations/cmm_be"
+      }
+    },
     "history_be": {
       "main": "./src/history_be/main.mo",
       "type": "motoko",
