@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Principal } from "@dfinity/principal";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   Box,
   Button,
@@ -125,6 +125,16 @@ const Home = () => {
         </FormControl>
         <Button color="primary" onClick={handleSubmit}>
           Go to dashboard
+        </Button>
+      </Box>
+      <Box sx={{ marginBottom: 5 }}>
+        <Typography sx={{ marginBottom: 2 }}>
+          Manage and reuse metadata for your Wasm modules
+          <br />
+          via CMM (Controller-Managed Metadata).
+        </Typography>
+        <Button color="primary" component={Link} to="/cmm">
+          Go to CMM
         </Button>
       </Box>
       <Box>

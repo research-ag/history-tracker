@@ -13,6 +13,11 @@ import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
+import {
+  canisterId as cmmCanisterId,
+  createActor as cmmCreateActor,
+} from "@declarations/cmm_be";
+import { _SERVICE as CMM_SERVICE } from "@declarations/cmm_be/cmm_be.did";
 
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
@@ -20,6 +25,7 @@ import { useIdentity } from "./identity";
 import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
+export const CMM_BACKEND_CANISTER_ID = cmmCanisterId;
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
 
 const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
@@ -49,6 +55,22 @@ export const useHistoryBackend = () => {
     [identity.getPrincipal().toText()]
   );
   return { backend };
+};
+
+const getCMMFromCache = memoize<ActorSubclass<CMM_SERVICE>>();
+export const useCMM = () => {
+  const { identity } = useIdentity();
+  const cmm = getCMMFromCache(
+    () =>
+      cmmCreateActor(cmmCanisterId, {
+        agentOptions: {
+          identity,
+          verifyQuerySignatures: false,
+        },
+      }),
+    [identity.getPrincipal().toText()]
+  );
+  return { cmm };
 };
 
 const getManagementFromCache = memoize<ActorSubclass<MANAGEMENT_SERVICE>>();
@@ -326,6 +348,158 @@ export const useFetchCanisterLogs = (
         });
       },
       enabled,
+    }
+  );
+};
+
+// -----------
+// === CMM ===
+// -----------
+
+export const useCheckCMM = (enabled?: boolean) => {
+  const { cmm } = useCMM();
+  const { identity } = useIdentity();
+  const userPrincipal = identity.getPrincipal().toText();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(["check-cmm", userPrincipal], () => cmm.checkCMM(), {
+    enabled,
+    onError: () => {
+      enqueueSnackbar("Failed to check if the metadata exist", {
+        variant: "error",
+      });
+    },
+  });
+};
+
+export const useCreateCMM = () => {
+  const { cmm } = useCMM();
+  const { identity } = useIdentity();
+  const userPrincipal = identity.getPrincipal().toText();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(() => cmm.createCMM(), {
+    onSuccess: () => {
+      queryClient.invalidateQueries(["check-cmm", userPrincipal]);
+      enqueueSnackbar("The metadata has been successfully created", {
+        variant: "success",
+      });
+    },
+    onError: () => {
+      enqueueSnackbar("Failed to create the metadata", {
+        variant: "error",
+      });
+    },
+  });
+};
+
+export const useGetWasmMetadata = () => {
+  const { cmm } = useCMM();
+  const { identity } = useIdentity();
+  const userPrincipal = identity.getPrincipal().toText();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(["wasm-metadata", userPrincipal], () => cmm.wasm_metadata(), {
+    onError: () => {
+      enqueueSnackbar("Failed to fetch the wasm metadata", {
+        variant: "error",
+      });
+    },
+  });
+};
+
+interface GetWasmMetadataByHashPayload {
+  moduleHash: Uint8Array | number[];
+}
+
+export const useGetWasmMetadataByHash = ({
+  moduleHash,
+}: GetWasmMetadataByHashPayload) => {
+  const { cmm } = useCMM();
+  const { identity } = useIdentity();
+  const userPrincipal = identity.getPrincipal().toText();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    ["wasm-metadata-by-hash", userPrincipal, moduleHash],
+    () => cmm.wasm_metadata_by_hash(moduleHash),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the wasm metadata by hash", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface AddWasmMetadataPayload {
+  moduleHash: Uint8Array | number[];
+  description?: string;
+  buildInstructions?: string;
+}
+
+export const useAddWasmMetadata = () => {
+  const { cmm } = useCMM();
+  const { identity } = useIdentity();
+  const userPrincipal = identity.getPrincipal().toText();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(
+    ({ moduleHash, description, buildInstructions }: AddWasmMetadataPayload) =>
+      cmm.add_wasm_metadata(
+        moduleHash,
+        typeof description !== "undefined" ? [description] : [],
+        typeof buildInstructions !== "undefined" ? [buildInstructions] : []
+      ),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
+        enqueueSnackbar("The wasm module has been successfully added", {
+          variant: "success",
+        });
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to add the wasm module", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface UpdateWasmMetadataPayload {
+  moduleHash: Uint8Array | number[];
+  description?: string;
+  buildInstructions?: string;
+}
+
+export const useUpdateWasmMetadata = () => {
+  const { cmm } = useCMM();
+  const { identity } = useIdentity();
+  const userPrincipal = identity.getPrincipal().toText();
+  const queryClient = useQueryClient();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(
+    ({
+      moduleHash,
+      description,
+      buildInstructions,
+    }: UpdateWasmMetadataPayload) =>
+      cmm.update_wasm_metadata(
+        moduleHash,
+        typeof description !== "undefined" ? [description] : [],
+        typeof buildInstructions !== "undefined" ? [buildInstructions] : []
+      ),
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
+        enqueueSnackbar("The wasm module has been successfully updated", {
+          variant: "success",
+        });
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to update the wasm module", {
+          variant: "error",
+        });
+      },
     }
   );
 };
