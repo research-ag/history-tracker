@@ -2,6 +2,7 @@ import Principal "mo:base/Principal";
 import RBTree "mo:base/RBTree";
 import Iter "mo:base/Iter";
 import Error "mo:base/Error";
+import Array "mo:base/Array";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
 
@@ -44,12 +45,14 @@ actor class () = self {
     cmm_storage.get(index).wasm_metadata();
   };
 
-  public shared query ({ caller }) func wasm_metadata_by_hash(module_hash : Blob) : async CMM.WasmMetadata {
-    let ?index = cmm_storage_map.get(caller) else throw Error.reject("There is no metadata managed by the caller.");
-    let ?wasm_metadata = cmm_storage
-    |> _.get(index)
-    |> _.wasm_metadata_by_hash(module_hash) else throw Error.reject("There is no metadata related to the provided module hash.");
-    wasm_metadata;
+  public query func wasm_metadata_by_principal(p : Principal) : async [CMM.WasmMetadata] {
+    let ?index = cmm_storage_map.get(p) else throw Error.reject("There is no metadata managed by the principal.");
+    cmm_storage.get(index).wasm_metadata();
+  };
+
+  /// Returns principals managing metadata.
+  public query func check_principals(p_list : [Principal]) : async [Principal] {
+    Array.filter<Principal>(p_list, func(p : Principal) = cmm_storage_map.get(p) != null);
   };
 
   public shared ({ caller }) func add_wasm_metadata(module_hash : Blob, description : ?Text, build_instructions : ?Text) : async () {

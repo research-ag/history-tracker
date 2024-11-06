@@ -406,23 +406,23 @@ export const useGetWasmMetadata = () => {
   });
 };
 
-interface GetWasmMetadataByHashPayload {
-  moduleHash: Uint8Array | number[];
+interface GetWasmMetadataByPrincipalPayload {
+  principal: Principal;
 }
 
-export const useGetWasmMetadataByHash = ({
-  moduleHash,
-}: GetWasmMetadataByHashPayload) => {
+export const useGetWasmMetadataByPrincipal = (
+  { principal }: GetWasmMetadataByPrincipalPayload,
+  enabled?: boolean
+) => {
   const { cmm } = useCMM();
-  const { identity } = useIdentity();
-  const userPrincipal = identity.getPrincipal().toText();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
-    ["wasm-metadata-by-hash", userPrincipal, moduleHash],
-    () => cmm.wasm_metadata_by_hash(moduleHash),
+    ["wasm-metadata-by-principal", principal?.toText()],
+    () => cmm.wasm_metadata_by_principal(principal),
     {
+      enabled,
       onError: () => {
-        enqueueSnackbar("Failed to fetch the wasm metadata by hash", {
+        enqueueSnackbar("Failed to fetch the wasm metadata by principal", {
           variant: "error",
         });
       },
@@ -497,6 +497,30 @@ export const useUpdateWasmMetadata = () => {
       },
       onError: () => {
         enqueueSnackbar("Failed to update the wasm module", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface PrincipalsWithMetadataPayload {
+  principals: Principal[];
+}
+
+export const usePrincipalsWithMetadata = (
+  { principals }: PrincipalsWithMetadataPayload,
+  enabled?: boolean
+) => {
+  const { cmm } = useCMM();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    ["principals-with-metadata", principals.map((p) => p.toText()).join(",")],
+    () => cmm.check_principals(principals),
+    {
+      enabled,
+      onError: () => {
+        enqueueSnackbar("Failed to check the controllers for metadata", {
           variant: "error",
         });
       },

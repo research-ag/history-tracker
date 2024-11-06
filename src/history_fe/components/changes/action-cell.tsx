@@ -1,16 +1,23 @@
-import { Box } from "@mui/joy";
+import { Box, Button } from "@mui/joy";
 
 import { ExtendedChange } from "@declarations/history_be/history_be.did";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 import { getSHA256Hash } from "@fe/utils/hash";
+import { WasmMetadata } from "@declarations/cmm_be/cmm_be.did";
 
 import ItemWithDetails from "./item-with-details";
 
 interface ActionCellProps {
   change: ExtendedChange;
+  wasmMetadata: WasmMetadata | null;
+  onViewMetadata: (wasmMetadata: WasmMetadata) => void;
 }
 
-const ActionCell = ({ change }: ActionCellProps) => {
+const ActionCell = ({
+  change,
+  wasmMetadata,
+  onViewMetadata,
+}: ActionCellProps) => {
   if ("creation" in change.details)
     return (
       <ItemWithDetails
@@ -65,6 +72,30 @@ const ActionCell = ({ change }: ActionCellProps) => {
                   Module hash is known:
                 </Box>{" "}
                 {mapModuleHash(moduleHash)}
+              </Box>
+            )}
+            {wasmMetadata ? (
+              <Box sx={{ marginTop: "8px" }}>
+                <Button
+                  onClick={() => {
+                    onViewMetadata(wasmMetadata);
+                  }}
+                  size="sm"
+                >
+                  Wasm metadata
+                </Button>
+              </Box>
+            ) : (
+              <Box>
+                <Box
+                  sx={{
+                    display: "inline",
+                    fontWeight: 600,
+                  }}
+                >
+                  Wasm metadata:
+                </Box>{" "}
+                None
               </Box>
             )}
           </Box>

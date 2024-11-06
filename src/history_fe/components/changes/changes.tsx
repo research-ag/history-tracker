@@ -1,13 +1,30 @@
-import { useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Alert, Box, LinearProgress, Table, useTheme } from "@mui/joy";
+import {
+  Alert,
+  Box,
+  LinearProgress,
+  Select,
+  Option,
+  Table,
+  useTheme,
+  Typography,
+} from "@mui/joy";
 
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
-import { useGetCanisterChanges, useReadState } from "@fe/integration";
+import {
+  useGetCanisterChanges,
+  useGetWasmMetadataByPrincipal,
+  usePrincipalsWithMetadata,
+  useReadState,
+} from "@fe/integration";
 import { getSHA256Hash } from "@fe/utils/hash";
+import { WasmMetadata } from "@declarations/cmm_be/cmm_be.did";
+import { ExtendedChange } from "@declarations/history_be/history_be.did";
 
+import ViewWasmMetadataModal from "../cmm/view-wasm-metadata";
 import HistorySummarySection from "./history-summary-section";
 import HistoryInfoLine from "./history-info-line";
 import GapsRowContent from "./gap-row-content";
@@ -24,8 +41,58 @@ const Changes = () => {
     Principal.fromText(canisterId!)
   );
 
-  const { data: { moduleHash: actualModuleHash } = { moduleHash: "" } } =
-    useReadState(Principal.fromText(canisterId!), true);
+  const [wasmMetadataToView, setWasmMetadataToView] =
+    useState<WasmMetadata | null>(null);
+
+  const [principalWithMetadata, setPrincipalWithMetadata] =
+    useState<Principal | null>(null);
+
+  const {
+    data: { moduleHash: actualModuleHash, controllers } = {
+      moduleHash: "",
+      controllers: [],
+    },
+  } = useReadState(Principal.fromText(canisterId!), true);
+
+  const { data: principalsWithMetadata } = usePrincipalsWithMetadata({
+    principals: controllers.map((c) => Principal.fromText(c)),
+  });
+
+  const { data: wasmMetadata = [] } = useGetWasmMetadataByPrincipal(
+    {
+      principal: principalWithMetadata!,
+    },
+    !!principalWithMetadata
+  );
+
+  const wasmMetadataMap = useMemo(
+    () =>
+      wasmMetadata.reduce<Record<string, WasmMetadata>>(
+        (acc, item: WasmMetadata) => ({
+          ...acc,
+          [getSHA256Hash(item.module_hash)]: item,
+        }),
+        {}
+      ),
+    [wasmMetadata]
+  );
+
+  const getWasmMetadata = (change: ExtendedChange): WasmMetadata | null => {
+    if ("code_deployment" in change.details) {
+      const codeDeploymentRecord = change.details.code_deployment;
+      const moduleHash = getSHA256Hash(codeDeploymentRecord.module_hash);
+      return wasmMetadataMap[moduleHash] ?? null;
+    }
+    return null;
+  };
+
+  useEffect(() => {
+    setPrincipalWithMetadata(
+      principalsWithMetadata?.length ? principalsWithMetadata[0] : null
+    );
+  }, [principalsWithMetadata]);
+
+  const cmmList = principalsWithMetadata ?? [];
 
   const showWarning = useMemo(() => {
     if (!data || !actualModuleHash) {
@@ -45,7 +112,40 @@ const Changes = () => {
   return (
     <DashboardPageLayout
       title="Changelog"
-      rightPart={<HistorySummarySection changes={data?.changes} />}
+      rightPart={
+        <>
+          {cmmList.length ? (
+            <Select
+              sx={{ maxWidth: "200px", mb: 1 }}
+              slotProps={{
+                listbox: {
+                  sx: {
+                    "& li": {
+                      maxWidth: "200px",
+                    },
+                  },
+                },
+              }}
+              size="sm"
+              value={
+                principalWithMetadata ? principalWithMetadata.toText() : null
+              }
+              onChange={(_, value) => {
+                setPrincipalWithMetadata(Principal.fromText(value as string));
+              }}
+            >
+              {cmmList.map((p) => (
+                <Option key={p.toText()} value={p.toText()}>
+                  {p.toText()}
+                </Option>
+              ))}
+            </Select>
+          ) : (
+            <Typography level="body-sm">Metadata not found</Typography>
+          )}
+          <HistorySummarySection changes={data?.changes} />
+        </>
+      }
       noteTooltip={
         <Box sx={{ width: "400px" }}>
           <Box sx={{ marginBottom: 1 }}>
@@ -122,7 +222,15 @@ const Changes = () => {
                       <tr key={change.timestamp_nanos}>
                         <td>{Number(change.change_index)}</td>
                         <td>{Number(change.canister_version)}</td>
-                        <td>{<ActionCell change={change} />}</td>
+                        <td>
+                          {
+                            <ActionCell
+                              change={change}
+                              wasmMetadata={getWasmMetadata(change)}
+                              onViewMetadata={setWasmMetadataToView}
+                            />
+                          }
+                        </td>
                         <td>{<OriginCell change={change} />}</td>
                         <td>
                           {format(
@@ -140,6 +248,11 @@ const Changes = () => {
           </>
         )}
       </Box>
+      <ViewWasmMetadataModal
+        wasmMetadata={wasmMetadataToView}
+        isOpen={!!wasmMetadataToView}
+        onClose={() => setWasmMetadataToView(null)}
+      />
     </DashboardPageLayout>
   );
 };
