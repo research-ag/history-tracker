@@ -16,6 +16,7 @@ import InfoItem from "@fe/components/info-item";
 import { useIdentity } from "@fe/integration/identity";
 import {
   BACKEND_CANISTER_ID,
+  CMM_BACKEND_CANISTER_ID,
   useGetIsCanisterTracked,
   useCallerIsController,
   useCanisterStatus,
@@ -111,6 +112,11 @@ const Dashboard = () => {
             <InfoItem
               label="Backend canister ID"
               content={BACKEND_CANISTER_ID}
+              withCopy
+            />
+            <InfoItem
+              label="CMM backend canister ID"
+              content={CMM_BACKEND_CANISTER_ID}
               withCopy
             />
             <InfoItem
