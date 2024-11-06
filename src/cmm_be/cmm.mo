@@ -45,6 +45,7 @@ module {
     public func add_wasm_metadata(module_hash : Blob, description : ?Text, build_instructions : ?Text) : async* () {
       let is_valid = Blob.toArray(module_hash).size();
       if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
+      if (wasm_modules_map.get(module_hash) != null) throw Error.reject("The provided module hash already exists.");
       wasm_modules_map.put(module_hash, wasm_modules.size());
       wasm_modules.add({
         module_hash;
