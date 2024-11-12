@@ -1,11 +1,11 @@
 {
   "canisters": {
-    "cmm_be": {
-      "main": "./src/cmm_be/main.mo",
+    "metadata_directory": {
+      "main": "./src/metadata_directory/main.mo",
       "type": "motoko",
       "declarations": {
         "bindings": ["js", "ts"],
-        "output": "./declarations/cmm_be"
+        "output": "./declarations/metadata_directory"
       }
     },
     "history_be": {
