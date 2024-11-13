@@ -8,7 +8,7 @@ import {
 
 import Home from "@fe/components/home";
 import Dashboard from "@fe/components/dashboard";
-import CMM from "@fe/components/cmm";
+import MetadataDirectory from "@fe/components/metadata-directory";
 import ErrorLayout from "@fe/components/error-layout";
 
 const RootBoundary = () => {
@@ -26,7 +26,7 @@ const router = createBrowserRouter(
     <Route path="/" errorElement={<RootBoundary />}>
       <Route index element={<Home />} />
       <Route path="dashboard/:canisterId" element={<Dashboard />} />
-      <Route path="cmm" element={<CMM />} />
+      <Route path="metadata-directory" element={<MetadataDirectory />} />
     </Route>
   )
 );

@@ -1,21 +1,21 @@
 import { Box, Button } from "@mui/joy";
+import { Principal } from "@dfinity/principal";
 
 import { ExtendedChange } from "@declarations/history_be/history_be.did";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 import { getSHA256Hash } from "@fe/utils/hash";
-import { WasmMetadata } from "@declarations/cmm_be/cmm_be.did";
 
 import ItemWithDetails from "./item-with-details";
 
 interface ActionCellProps {
   change: ExtendedChange;
-  wasmMetadata: WasmMetadata | null;
-  onViewMetadata: (wasmMetadata: WasmMetadata) => void;
+  metadataMap: Record<string, Array<Principal>>;
+  onViewMetadata: (moduleHash: Uint8Array | number[]) => void;
 }
 
 const ActionCell = ({
   change,
-  wasmMetadata,
+  metadataMap,
   onViewMetadata,
 }: ActionCellProps) => {
   if ("creation" in change.details)
@@ -44,6 +44,8 @@ const ActionCell = ({
       if ("install" in codeDeploymentRecord.mode) return "Install";
     };
     const moduleHash = getSHA256Hash(codeDeploymentRecord.module_hash);
+    const principalsWithMetadata =
+      metadataMap[codeDeploymentRecord.module_hash.join(",")] ?? [];
     return (
       <ItemWithDetails
         title={getMode()!}
@@ -74,11 +76,11 @@ const ActionCell = ({
                 {mapModuleHash(moduleHash)}
               </Box>
             )}
-            {wasmMetadata ? (
+            {principalsWithMetadata.length ? (
               <Box sx={{ marginTop: "8px" }}>
                 <Button
                   onClick={() => {
-                    onViewMetadata(wasmMetadata);
+                    onViewMetadata(codeDeploymentRecord.module_hash);
                   }}
                   size="sm"
                 >

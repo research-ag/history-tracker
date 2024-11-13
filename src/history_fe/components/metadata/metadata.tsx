@@ -6,6 +6,7 @@ import { Box, Button, LinearProgress, Typography } from "@mui/joy";
 
 import { useGetCanisterMetadata } from "@fe/integration";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
+import MetadataSourcesModal from "@fe/components/metadata-sources-modal";
 
 import UpdateMetadataModal from "./update-metadata-modal";
 
@@ -24,20 +25,32 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
     Principal.fromText(canisterId!)
   );
 
+  const [metadataSourcesModalOpen, setMetadataSourcesModalOpen] =
+    useState(false);
+
   return (
     <DashboardPageLayout
       title="Metadata"
       rightPart={
-        callerIsController ? (
+        <Box sx={{ display: "flex", gap: 1 }}>
           <Button
-            onClick={openModal}
-            variant="outlined"
             size="sm"
             color="neutral"
+            onClick={() => setMetadataSourcesModalOpen(true)}
           >
-            Update metadata
+            Metadata sources
           </Button>
-        ) : undefined
+          {!callerIsController ? (
+            <Button
+              onClick={openModal}
+              variant="outlined"
+              size="sm"
+              color="neutral"
+            >
+              Update metadata
+            </Button>
+          ) : undefined}
+        </Box>
       }
       onRefetch={() => {
         refetch();
@@ -72,6 +85,10 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
             metadata={data}
             isOpen={modalIsOpen}
             onClose={closeModal}
+          />
+          <MetadataSourcesModal
+            isOpen={metadataSourcesModalOpen}
+            onClose={() => setMetadataSourcesModalOpen(false)}
           />
         </Box>
       )}

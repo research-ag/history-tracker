@@ -18,6 +18,7 @@ import ThemeButton from "@fe/components/theme-button";
 import InfoItem from "@fe/components/info-item";
 import { useIdentity } from "@fe/integration/identity";
 import { BACKEND_CANISTER_ID } from "@fe/integration";
+import MetadataSourcesModal from "@fe/components/metadata-sources-modal";
 
 import TrackModal from "./track-modal";
 import icpLogo from "./icp-logo.svg";
@@ -29,6 +30,9 @@ const Home = () => {
   const [validationError, setValidationError] = useState(false);
 
   const [trackModalOpen, setTrackModalOpen] = useState(false);
+
+  const [metadataSourcesModalOpen, setMetadataSourcesModalOpen] =
+    useState(false);
 
   const { identity } = useIdentity();
 
@@ -129,16 +133,6 @@ const Home = () => {
       </Box>
       <Box sx={{ marginBottom: 5 }}>
         <Typography sx={{ marginBottom: 2 }}>
-          Manage and reuse metadata for your Wasm modules
-          <br />
-          via CMM (Controller-Managed Metadata).
-        </Typography>
-        <Button color="primary" component={Link} to="/cmm">
-          Go to CMM
-        </Button>
-      </Box>
-      <Box>
-        <Typography sx={{ marginBottom: 2 }}>
           Your canister is not tracked yet?
           <br /> We will be happy to provide you with the service.
         </Typography>
@@ -150,9 +144,34 @@ const Home = () => {
           Track
         </Button>
       </Box>
+      <Box sx={{ marginBottom: 5 }}>
+        <Typography sx={{ marginBottom: 2 }}>
+          Manage and reuse metadata for your Wasm modules
+          <br />
+          via Metadata directory.
+        </Typography>
+        <Button color="primary" component={Link} to="/metadata-directory">
+          Go to Metadata directory
+        </Button>
+      </Box>
+      <Box>
+        <Typography sx={{ marginBottom: 2 }}>
+          Specify your metadata sources here.
+        </Typography>
+        <Button
+          color="neutral"
+          onClick={() => setMetadataSourcesModalOpen(true)}
+        >
+          Metadata sources
+        </Button>
+      </Box>
       <TrackModal
         isOpen={trackModalOpen}
         onClose={() => setTrackModalOpen(false)}
+      />
+      <MetadataSourcesModal
+        isOpen={metadataSourcesModalOpen}
+        onClose={() => setMetadataSourcesModalOpen(false)}
       />
     </Box>
   );

@@ -4,9 +4,9 @@ import HomeIcon from "@mui/icons-material/Home";
 
 import InfoItem from "@fe/components/info-item";
 import {
-  CMM_BACKEND_CANISTER_ID,
-  useCheckCMM,
-  useCreateCMM,
+  METADATA_DIRECTORY_BACKEND_CANISTER_ID,
+  useCheckMetadataDirectory,
+  useCreateMetadataDirectory,
 } from "@fe/integration";
 import { useIdentity } from "@fe/integration/identity";
 import ConnectButton from "@fe/components/connect-button";
@@ -15,18 +15,20 @@ import ThemeButton from "@fe/components/theme-button";
 import WasmMetadata from "./wasm-metadata";
 import Loading from "./loading";
 
-const CMM = () => {
+const MetadataDirectory = () => {
   const { identity } = useIdentity();
 
   const userPrincipal = identity.getPrincipal().toText();
 
   const isAnonymous = userPrincipal === "2vxsx-fae";
 
-  const { data: metadataExists, isLoading: checkCMMLoading } = useCheckCMM(
-    !isAnonymous
-  );
+  const { data: metadataExists, isLoading: checkMetadataDirectoryLoading } =
+    useCheckMetadataDirectory(!isAnonymous);
 
-  const { mutate: createCMM, isLoading: createCMMLoading } = useCreateCMM();
+  const {
+    mutate: createMetadataDirectory,
+    isLoading: createMetadataDirectoryLoading,
+  } = useCreateMetadataDirectory();
 
   return (
     <Box
@@ -56,8 +58,8 @@ const CMM = () => {
         >
           <InfoItem label="Your principal" content={userPrincipal} withCopy />
           <InfoItem
-            label="CMM backend canister ID"
-            content={CMM_BACKEND_CANISTER_ID}
+            label="MD backend canister ID"
+            content={METADATA_DIRECTORY_BACKEND_CANISTER_ID}
             withCopy
           />
         </Box>
@@ -88,13 +90,13 @@ const CMM = () => {
         color="neutral"
       >
         <Typography sx={{ mb: 2 }} level="h1">
-          Controller-managed metadata
+          Metadata directory
         </Typography>
         {isAnonymous ? (
           <Typography>
             To continue working with metadata, please sign in.
           </Typography>
-        ) : checkCMMLoading ? (
+        ) : checkMetadataDirectoryLoading ? (
           <Loading />
         ) : metadataExists ? (
           <Box>
@@ -103,21 +105,21 @@ const CMM = () => {
         ) : (
           <Box>
             <Box sx={{ marginBottom: 1 }}>
-              Metadata not found. Please create Controller-Managed Metadata for
+              Metadata directory not found. Please create metadata directory for
               your principal.
             </Box>
             <Button
               variant="solid"
               color="success"
-              onClick={() => createCMM()}
+              onClick={() => createMetadataDirectory()}
               startDecorator={
-                createCMMLoading ? (
+                createMetadataDirectoryLoading ? (
                   <CircularProgress size="sm" color="neutral" />
                 ) : undefined
               }
-              disabled={createCMMLoading}
+              disabled={createMetadataDirectoryLoading}
             >
-              Create CMM
+              Create directory
             </Button>
           </Box>
         )}
@@ -126,4 +128,4 @@ const CMM = () => {
   );
 };
 
-export default CMM;
+export default MetadataDirectory;

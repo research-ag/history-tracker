@@ -9,7 +9,7 @@ import {
 } from "@mui/joy";
 import MDEditor from "@uiw/react-md-editor";
 
-import { WasmMetadata } from "@declarations/cmm_be/cmm_be.did";
+import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
 import { getSHA256Hash } from "@fe/utils/hash";
 
 interface ViewWasmMetadataModalProps {

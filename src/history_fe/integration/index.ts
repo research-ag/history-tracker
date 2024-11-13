@@ -14,10 +14,10 @@ import { decodeFirst, TagDecoder } from "cborg";
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
 import {
-  canisterId as cmmCanisterId,
-  createActor as cmmCreateActor,
-} from "@declarations/cmm_be";
-import { _SERVICE as CMM_SERVICE } from "@declarations/cmm_be/cmm_be.did";
+  canisterId as metadataDirectoryCanisterId,
+  createActor as metadataDirectoryCreateActor,
+} from "@declarations/metadata_directory";
+import { _SERVICE as MD_SERVICE } from "@declarations/metadata_directory/metadata_directory.did";
 
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
@@ -25,7 +25,8 @@ import { useIdentity } from "./identity";
 import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
-export const CMM_BACKEND_CANISTER_ID = cmmCanisterId;
+export const METADATA_DIRECTORY_BACKEND_CANISTER_ID =
+  metadataDirectoryCanisterId;
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
 
 const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
@@ -57,12 +58,12 @@ export const useHistoryBackend = () => {
   return { backend };
 };
 
-const getCMMFromCache = memoize<ActorSubclass<CMM_SERVICE>>();
-export const useCMM = () => {
+const getMetadataDirectoryFromCache = memoize<ActorSubclass<MD_SERVICE>>();
+export const useMetadataDirectory = () => {
   const { identity } = useIdentity();
-  const cmm = getCMMFromCache(
+  const metadataDirectory = getMetadataDirectoryFromCache(
     () =>
-      cmmCreateActor(cmmCanisterId, {
+      metadataDirectoryCreateActor(metadataDirectoryCanisterId, {
         agentOptions: {
           identity,
           verifyQuerySignatures: false,
@@ -70,7 +71,7 @@ export const useCMM = () => {
       }),
     [identity.getPrincipal().toText()]
   );
-  return { cmm };
+  return { metadataDirectory };
 };
 
 const getManagementFromCache = memoize<ActorSubclass<MANAGEMENT_SERVICE>>();
@@ -352,40 +353,44 @@ export const useFetchCanisterLogs = (
   );
 };
 
-// -----------
-// === CMM ===
-// -----------
+// --------------------------
+// === Metadata directory ===
+// --------------------------
 
-export const useCheckCMM = (enabled?: boolean) => {
-  const { cmm } = useCMM();
+export const useCheckMetadataDirectory = (enabled?: boolean) => {
+  const { metadataDirectory } = useMetadataDirectory();
   const { identity } = useIdentity();
   const userPrincipal = identity.getPrincipal().toText();
   const { enqueueSnackbar } = useSnackbar();
-  return useQuery(["check-cmm", userPrincipal], () => cmm.checkCMM(), {
-    enabled,
-    onError: () => {
-      enqueueSnackbar("Failed to check if the metadata exist", {
-        variant: "error",
-      });
-    },
-  });
+  return useQuery(
+    ["check-metadata-directory-result", userPrincipal],
+    () => metadataDirectory.check_directory(),
+    {
+      enabled,
+      onError: () => {
+        enqueueSnackbar("Failed to check if the metadata directory exist", {
+          variant: "error",
+        });
+      },
+    }
+  );
 };
 
-export const useCreateCMM = () => {
-  const { cmm } = useCMM();
+export const useCreateMetadataDirectory = () => {
+  const { metadataDirectory } = useMetadataDirectory();
   const { identity } = useIdentity();
   const userPrincipal = identity.getPrincipal().toText();
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
-  return useMutation(() => cmm.createCMM(), {
+  return useMutation(() => metadataDirectory.create_directory(), {
     onSuccess: () => {
-      queryClient.invalidateQueries(["check-cmm", userPrincipal]);
-      enqueueSnackbar("The metadata has been successfully created", {
+      queryClient.invalidateQueries(["check-metadata-directory-result", userPrincipal]);
+      enqueueSnackbar("The metadata directory has been successfully created", {
         variant: "success",
       });
     },
     onError: () => {
-      enqueueSnackbar("Failed to create the metadata", {
+      enqueueSnackbar("Failed to create the metadata directory", {
         variant: "error",
       });
     },
@@ -393,36 +398,16 @@ export const useCreateCMM = () => {
 };
 
 export const useGetWasmMetadata = () => {
-  const { cmm } = useCMM();
+  const { metadataDirectory } = useMetadataDirectory();
   const { identity } = useIdentity();
   const userPrincipal = identity.getPrincipal().toText();
   const { enqueueSnackbar } = useSnackbar();
-  return useQuery(["wasm-metadata", userPrincipal], () => cmm.wasm_metadata(), {
-    onError: () => {
-      enqueueSnackbar("Failed to fetch the wasm metadata", {
-        variant: "error",
-      });
-    },
-  });
-};
-
-interface GetWasmMetadataByPrincipalPayload {
-  principal: Principal;
-}
-
-export const useGetWasmMetadataByPrincipal = (
-  { principal }: GetWasmMetadataByPrincipalPayload,
-  enabled?: boolean
-) => {
-  const { cmm } = useCMM();
-  const { enqueueSnackbar } = useSnackbar();
   return useQuery(
-    ["wasm-metadata-by-principal", principal?.toText()],
-    () => cmm.wasm_metadata_by_principal(principal),
+    ["wasm-metadata", userPrincipal],
+    () => metadataDirectory.get_wasm_metadata(),
     {
-      enabled,
       onError: () => {
-        enqueueSnackbar("Failed to fetch the wasm metadata by principal", {
+        enqueueSnackbar("Failed to fetch the wasm metadata", {
           variant: "error",
         });
       },
@@ -437,14 +422,14 @@ interface AddWasmMetadataPayload {
 }
 
 export const useAddWasmMetadata = () => {
-  const { cmm } = useCMM();
+  const { metadataDirectory } = useMetadataDirectory();
   const { identity } = useIdentity();
   const userPrincipal = identity.getPrincipal().toText();
   const queryClient = useQueryClient();
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     ({ moduleHash, description, buildInstructions }: AddWasmMetadataPayload) =>
-      cmm.add_wasm_metadata(
+      metadataDirectory.add_wasm_metadata(
         moduleHash,
         typeof description !== "undefined" ? [description] : [],
         typeof buildInstructions !== "undefined" ? [buildInstructions] : []
@@ -472,7 +457,7 @@ interface UpdateWasmMetadataPayload {
 }
 
 export const useUpdateWasmMetadata = () => {
-  const { cmm } = useCMM();
+  const { metadataDirectory } = useMetadataDirectory();
   const { identity } = useIdentity();
   const userPrincipal = identity.getPrincipal().toText();
   const queryClient = useQueryClient();
@@ -483,7 +468,7 @@ export const useUpdateWasmMetadata = () => {
       description,
       buildInstructions,
     }: UpdateWasmMetadataPayload) =>
-      cmm.update_wasm_metadata(
+      metadataDirectory.update_wasm_metadata(
         moduleHash,
         typeof description !== "undefined" ? [description] : [],
         typeof buildInstructions !== "undefined" ? [buildInstructions] : []
@@ -504,23 +489,51 @@ export const useUpdateWasmMetadata = () => {
   );
 };
 
-interface PrincipalsWithMetadataPayload {
-  principals: Principal[];
+interface FindWasmMetadataPayload {
+  principal: Principal;
+  moduleHash: Uint8Array | number[];
 }
 
-export const usePrincipalsWithMetadata = (
-  { principals }: PrincipalsWithMetadataPayload,
-  enabled?: boolean
-) => {
-  const { cmm } = useCMM();
+export const useFindWasmMetadata = ({
+  principal,
+  moduleHash,
+}: FindWasmMetadataPayload) => {
+  const { metadataDirectory } = useMetadataDirectory();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
-    ["principals-with-metadata", principals.map((p) => p.toText()).join(",")],
-    () => cmm.check_principals(principals),
+    ["found-wasm-metadata", principal.toText(), moduleHash.join(",")],
+    () => metadataDirectory.find_wasm_metadata(principal, moduleHash),
     {
-      enabled,
       onError: () => {
-        enqueueSnackbar("Failed to check the controllers for metadata", {
+        enqueueSnackbar("Failed to find the wasm metadata", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface AvailableMetadataPayload {
+  principals: Array<Principal>;
+  moduleHashes: Array<Uint8Array | number[]>;
+}
+
+export const useAvailableMetadata = ({
+  principals,
+  moduleHashes,
+}: AvailableMetadataPayload) => {
+  const { metadataDirectory } = useMetadataDirectory();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(
+    [
+      "available-metadata",
+      principals.map((x) => x.toText()).join(","),
+      moduleHashes.map((x) => x.join(",")).join(","),
+    ],
+    () => metadataDirectory.available_metadata(principals, moduleHashes),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to get the available metadata", {
           variant: "error",
         });
       },

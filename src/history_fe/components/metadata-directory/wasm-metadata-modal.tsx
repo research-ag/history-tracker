@@ -22,7 +22,7 @@ import MDEditor from "@uiw/react-md-editor";
 
 import { useAddWasmMetadata, useUpdateWasmMetadata } from "@fe/integration";
 import ErrorAlert from "@fe/components/error-alert";
-import { WasmMetadata } from "@declarations/cmm_be/cmm_be.did";
+import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
 import {
   fromSHA256Hash,
   getSHA256Hash,

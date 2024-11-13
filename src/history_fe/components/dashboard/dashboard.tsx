@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { Box, Tabs, TabList, Tab, Button, Typography } from "@mui/joy";
@@ -16,7 +16,7 @@ import InfoItem from "@fe/components/info-item";
 import { useIdentity } from "@fe/integration/identity";
 import {
   BACKEND_CANISTER_ID,
-  CMM_BACKEND_CANISTER_ID,
+  METADATA_DIRECTORY_BACKEND_CANISTER_ID,
   useGetIsCanisterTracked,
   useCallerIsController,
   useCanisterStatus,
@@ -115,8 +115,8 @@ const Dashboard = () => {
               withCopy
             />
             <InfoItem
-              label="CMM backend canister ID"
-              content={CMM_BACKEND_CANISTER_ID}
+              label="MD backend canister ID"
+              content={METADATA_DIRECTORY_BACKEND_CANISTER_ID}
               withCopy
             />
             <InfoItem
