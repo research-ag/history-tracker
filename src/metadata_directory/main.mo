@@ -46,29 +46,24 @@ actor class () = self {
   // API for Metadata directory management
   //
 
-  public shared ({ caller }) func create_directory() {
-    if (storage_map.get(caller) != null) throw Error.reject("Metadata directory managed by the caller already exists.");
-    let wasm_modules : Vec.Vector<WasmMetadata> = Vec.new();
-    storage_map.put(caller, Vec.size(storage));
-    Vec.add(storage, wasm_modules);
-  };
-
-  /// Checks if the metadata directory exists for the caller.
-  public shared query ({ caller }) func check_directory() : async Bool {
-    storage_map.get(caller) != null;
-  };
-
   public shared query ({ caller }) func get_wasm_metadata() : async [WasmMetadata] {
-    let ?index = storage_map.get(caller) else throw Error.reject("There is no metadata directory managed by the caller.");
+    let ?index = storage_map.get(caller) else return [];
     Vec.get(storage, index) |> Vec.toArray(_);
   };
 
   public shared ({ caller }) func add_wasm_metadata(module_hash : Blob, description : ?Text, build_instructions : ?Text) : async () {
-    let ?index = storage_map.get(caller) else throw Error.reject("There is no metadata directory managed by the caller.");
+    let wasm_modules = switch (storage_map.get(caller)) {
+      case (?index) Vec.get(storage, index);
+      case (null) {
+        let wasm_modules_new : Vec.Vector<WasmMetadata> = Vec.new();
+        storage_map.put(caller, Vec.size(storage));
+        Vec.add(storage, wasm_modules_new);
+        wasm_modules_new;
+      };
+    };
     let is_valid = Blob.toArray(module_hash).size();
     if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
     if (wasm_modules_map.get((caller, module_hash)) != null) throw Error.reject("The provided module hash already exists.");
-    let wasm_modules = Vec.get(storage, index);
     wasm_modules_map.put((caller, module_hash), Vec.size(wasm_modules));
     Vec.add(
       wasm_modules,
@@ -82,10 +77,10 @@ actor class () = self {
   };
 
   public shared ({ caller }) func update_wasm_metadata(module_hash : Blob, description : ?Text, build_instructions : ?Text) : async () {
-    let ?directory_index = storage_map.get(caller) else throw Error.reject("There is no metadata directory managed by the caller.");
+    let ?directory_index = storage_map.get(caller) else throw Error.reject("There is no metadata for the wasm module.");
+    let ?index = wasm_modules_map.get((caller, module_hash)) else throw Error.reject("There is no metadata for the wasm module.");
     let is_valid = Blob.toArray(module_hash).size();
     if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
-    let ?index = wasm_modules_map.get((caller, module_hash)) else throw Error.reject("There is no metadata for the wasm module.");
     let wasm_modules = Vec.get(storage, directory_index);
     let wasm_module_metadata = Vec.get(wasm_modules, index);
     Vec.put(
@@ -105,7 +100,7 @@ actor class () = self {
   //
 
   public query func find_wasm_metadata(principal : Principal, module_hash : Blob) : async WasmMetadata {
-    let ?directory_index = storage_map.get(principal) else throw Error.reject("There is no metadata directory managed by the caller.");
+    let ?directory_index = storage_map.get(principal) else throw Error.reject("There is no metadata for the wasm module.");
     let ?index = wasm_modules_map.get((principal, module_hash)) else throw Error.reject("There is no metadata for the wasm module.");
     let wasm_modules = Vec.get(storage, directory_index);
     let wasm_module_metadata = Vec.get(wasm_modules, index);
