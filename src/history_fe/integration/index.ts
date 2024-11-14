@@ -357,49 +357,6 @@ export const useFetchCanisterLogs = (
 // === Metadata directory ===
 // --------------------------
 
-export const useCheckMetadataDirectory = (enabled?: boolean) => {
-  const { metadataDirectory } = useMetadataDirectory();
-  const { identity } = useIdentity();
-  const userPrincipal = identity.getPrincipal().toText();
-  const { enqueueSnackbar } = useSnackbar();
-  return useQuery(
-    ["check-metadata-directory-result", userPrincipal],
-    () => metadataDirectory.check_directory(),
-    {
-      enabled,
-      onError: () => {
-        enqueueSnackbar("Failed to check if the metadata directory exist", {
-          variant: "error",
-        });
-      },
-    }
-  );
-};
-
-export const useCreateMetadataDirectory = () => {
-  const { metadataDirectory } = useMetadataDirectory();
-  const { identity } = useIdentity();
-  const userPrincipal = identity.getPrincipal().toText();
-  const queryClient = useQueryClient();
-  const { enqueueSnackbar } = useSnackbar();
-  return useMutation(() => metadataDirectory.create_directory(), {
-    onSuccess: () => {
-      queryClient.invalidateQueries([
-        "check-metadata-directory-result",
-        userPrincipal,
-      ]);
-      enqueueSnackbar("The metadata directory has been successfully created", {
-        variant: "success",
-      });
-    },
-    onError: () => {
-      enqueueSnackbar("Failed to create the metadata directory", {
-        variant: "error",
-      });
-    },
-  });
-};
-
 export const useGetWasmMetadata = () => {
   const { metadataDirectory } = useMetadataDirectory();
   const { identity } = useIdentity();

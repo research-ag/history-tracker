@@ -1,19 +1,14 @@
 import { Link } from "react-router-dom";
-import { Sheet, Box, Typography, Button, CircularProgress } from "@mui/joy";
+import { Sheet, Box, Typography, Button } from "@mui/joy";
 import HomeIcon from "@mui/icons-material/Home";
 
 import InfoItem from "@fe/components/info-item";
-import {
-  METADATA_DIRECTORY_BACKEND_CANISTER_ID,
-  useCheckMetadataDirectory,
-  useCreateMetadataDirectory,
-} from "@fe/integration";
+import { METADATA_DIRECTORY_BACKEND_CANISTER_ID } from "@fe/integration";
 import { useIdentity } from "@fe/integration/identity";
 import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
 
 import WasmMetadata from "./wasm-metadata";
-import Loading from "./loading";
 
 const MetadataDirectory = () => {
   const { identity } = useIdentity();
@@ -21,14 +16,6 @@ const MetadataDirectory = () => {
   const userPrincipal = identity.getPrincipal().toText();
 
   const isAnonymous = userPrincipal === "2vxsx-fae";
-
-  const { data: metadataExists, isLoading: checkMetadataDirectoryLoading } =
-    useCheckMetadataDirectory(!isAnonymous);
-
-  const {
-    mutate: createMetadataDirectory,
-    isLoading: createMetadataDirectoryLoading,
-  } = useCreateMetadataDirectory();
 
   return (
     <Box
@@ -96,31 +83,9 @@ const MetadataDirectory = () => {
           <Typography>
             To continue working with metadata, please sign in.
           </Typography>
-        ) : checkMetadataDirectoryLoading ? (
-          <Loading />
-        ) : metadataExists ? (
-          <Box>
-            <WasmMetadata />
-          </Box>
         ) : (
           <Box>
-            <Box sx={{ marginBottom: 1 }}>
-              Metadata directory not found. Please create metadata directory for
-              your principal.
-            </Box>
-            <Button
-              variant="solid"
-              color="success"
-              onClick={() => createMetadataDirectory()}
-              startDecorator={
-                createMetadataDirectoryLoading ? (
-                  <CircularProgress size="sm" color="neutral" />
-                ) : undefined
-              }
-              disabled={createMetadataDirectoryLoading}
-            >
-              Create directory
-            </Button>
+            <WasmMetadata />
           </Box>
         )}
       </Sheet>
