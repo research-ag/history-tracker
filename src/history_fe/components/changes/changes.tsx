@@ -19,6 +19,7 @@ import HistoryInfoLine from "./history-info-line";
 import GapsRowContent from "./gap-row-content";
 import ActionCell from "./action-cell";
 import OriginCell from "./origin-cell";
+import WasmMetadataModal from "./wasm-metadata-modal";
 import { addGaps } from "./utils";
 
 const Changes = () => {
@@ -33,9 +34,6 @@ const Changes = () => {
   const [moduleHashToViewMetadata, setModuleHashToViewMetadata] = useState<
     (Uint8Array | number[]) | null
   >(null);
-
-  const [principalWithMetadata, setPrincipalWithMetadata] =
-    useState<Principal | null>(null);
 
   const {
     data: { moduleHash: actualModuleHash } = {
@@ -65,10 +63,6 @@ const Changes = () => {
       {}
     );
   }, [availableMetadata]);
-
-  const principalsWithMetadata = (availableMetadata ?? []).map(
-    (value) => value[0]
-  );
 
   const showWarning = useMemo(() => {
     if (!data || !actualModuleHash) {
@@ -191,6 +185,14 @@ const Changes = () => {
           </>
         )}
       </Box>
+      <WasmMetadataModal
+        moduleHash={moduleHashToViewMetadata}
+        metadataMap={metadataMap}
+        isOpen={!!moduleHashToViewMetadata}
+        onClose={() => {
+          setModuleHashToViewMetadata(null);
+        }}
+      />
     </DashboardPageLayout>
   );
 };

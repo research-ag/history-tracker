@@ -384,7 +384,10 @@ export const useCreateMetadataDirectory = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(() => metadataDirectory.create_directory(), {
     onSuccess: () => {
-      queryClient.invalidateQueries(["check-metadata-directory-result", userPrincipal]);
+      queryClient.invalidateQueries([
+        "check-metadata-directory-result",
+        userPrincipal,
+      ]);
       enqueueSnackbar("The metadata directory has been successfully created", {
         variant: "success",
       });
@@ -494,16 +497,18 @@ interface FindWasmMetadataPayload {
   moduleHash: Uint8Array | number[];
 }
 
-export const useFindWasmMetadata = ({
-  principal,
-  moduleHash,
-}: FindWasmMetadataPayload) => {
+export const useFindWasmMetadata = (
+  { principal, moduleHash }: FindWasmMetadataPayload,
+  enabled?: boolean
+) => {
   const { metadataDirectory } = useMetadataDirectory();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
-    ["found-wasm-metadata", principal.toText(), moduleHash.join(",")],
+    ["found-wasm-metadata", principal?.toText(), moduleHash?.join(",")],
     () => metadataDirectory.find_wasm_metadata(principal, moduleHash),
     {
+      enabled,
+      keepPreviousData: true,
       onError: () => {
         enqueueSnackbar("Failed to find the wasm metadata", {
           variant: "error",
