@@ -62,35 +62,30 @@ const WasmMetadata_ = () => {
           </tr>
         </thead>
         <tbody>
-          {(data ?? []).map((record, i) => (
-            <tr key={record.module_hash.join(";")}>
-              <td>{i + 1}</td>
-              <td>
-                {format(
-                  new Date(Number(record.latest_update_timestamp) / 1_000_000),
-                  "MMM dd, yyyy HH:mm"
-                )}
-              </td>
-              <td>
-                {
-                  <ItemWithDetails
-                    title={getSHA256Hash(record.module_hash).slice(0, 7)}
-                    hash={getSHA256Hash(record.module_hash)}
-                    titleIsHash
-                    details={
-                      <Box sx={{ overflowWrap: "break-word" }}>
-                        <Box>
-                          <Box
-                            sx={{
-                              display: "inline",
-                              fontWeight: 600,
-                            }}
-                          >
-                            Module hash:
-                          </Box>{" "}
-                          {getSHA256Hash(record.module_hash)}
-                        </Box>
-                        {mapModuleHash(getSHA256Hash(record.module_hash)) && (
+          {[...(data ?? [])]
+            .sort(
+              (a, b) =>
+                Number(a.created_timestamp) - Number(b.created_timestamp)
+            )
+            .map((record, i) => (
+              <tr key={record.module_hash.join(";")}>
+                <td>{i + 1}</td>
+                <td>
+                  {format(
+                    new Date(
+                      Number(record.latest_update_timestamp) / 1_000_000
+                    ),
+                    "MMM dd, yyyy HH:mm"
+                  )}
+                </td>
+                <td>
+                  {
+                    <ItemWithDetails
+                      title={getSHA256Hash(record.module_hash).slice(0, 7)}
+                      hash={getSHA256Hash(record.module_hash)}
+                      titleIsHash
+                      details={
+                        <Box sx={{ overflowWrap: "break-word" }}>
                           <Box>
                             <Box
                               sx={{
@@ -98,69 +93,83 @@ const WasmMetadata_ = () => {
                                 fontWeight: 600,
                               }}
                             >
-                              Module hash is known:
+                              Module hash:
                             </Box>{" "}
-                            {mapModuleHash(getSHA256Hash(record.module_hash))}
+                            {getSHA256Hash(record.module_hash)}
                           </Box>
-                        )}
-                      </Box>
-                    }
-                  />
-                }
-              </td>
-              <td
-                style={{
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {record.description ? (
-                  record.description
-                ) : (
-                  <Box sx={{ opacity: 0.4 }}>Empty</Box>
-                )}
-              </td>
-              <td
-                style={{
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-              >
-                {record.build_instructions ? (
-                  record.build_instructions
-                ) : (
-                  <Box sx={{ opacity: 0.4 }}>Empty</Box>
-                )}
-              </td>
-              <td>
-                <Box sx={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <Tooltip title="View Wasm metadata">
-                    <IconButton
-                      onClick={() => {
-                        setWasmMetadataToView(record);
-                      }}
-                    >
-                      <VisibilityIcon />
-                    </IconButton>
-                  </Tooltip>
-                  <Tooltip title="Edit Wasm metadata">
-                    <Box>
+                          {mapModuleHash(getSHA256Hash(record.module_hash)) && (
+                            <Box>
+                              <Box
+                                sx={{
+                                  display: "inline",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                Module hash is known:
+                              </Box>{" "}
+                              {mapModuleHash(getSHA256Hash(record.module_hash))}
+                            </Box>
+                          )}
+                        </Box>
+                      }
+                    />
+                  }
+                </td>
+                <td
+                  style={{
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {record.description ? (
+                    record.description
+                  ) : (
+                    <Box sx={{ opacity: 0.4 }}>Empty</Box>
+                  )}
+                </td>
+                <td
+                  style={{
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {record.build_instructions ? (
+                    record.build_instructions
+                  ) : (
+                    <Box sx={{ opacity: 0.4 }}>Empty</Box>
+                  )}
+                </td>
+                <td>
+                  <Box
+                    sx={{ display: "flex", alignItems: "center", gap: "8px" }}
+                  >
+                    <Tooltip title="View Wasm metadata">
                       <IconButton
                         onClick={() => {
-                          setModalIsOpen(true);
-                          setWasmMetadataToEdit(record);
+                          setWasmMetadataToView(record);
                         }}
                       >
-                        <EditIcon />
+                        <VisibilityIcon />
                       </IconButton>
-                    </Box>
-                  </Tooltip>
-                </Box>
-              </td>
-            </tr>
-          ))}
+                    </Tooltip>
+                    <Tooltip title="Edit Wasm metadata">
+                      <Box>
+                        <IconButton
+                          onClick={() => {
+                            setModalIsOpen(true);
+                            setWasmMetadataToEdit(record);
+                          }}
+                        >
+                          <EditIcon />
+                        </IconButton>
+                      </Box>
+                    </Tooltip>
+                  </Box>
+                </td>
+              </tr>
+            ))}
         </tbody>
       </Table>
       <ViewWasmMetadataModal

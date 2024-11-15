@@ -1,5 +1,6 @@
 import { Box, FormControl, FormLabel, Typography } from "@mui/joy";
 import MDEditor from "@uiw/react-md-editor";
+import { format } from "date-fns";
 
 import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
 import { getSHA256Hash } from "@fe/utils/hash";
@@ -46,6 +47,34 @@ const WasmMetadataView = ({ wasmMetadata }: WasmMetadataViewProps) => {
         ) : (
           <Box sx={{ opacity: 0.4 }}>Empty</Box>
         )}
+      </FormControl>
+      <FormControl>
+        <FormLabel>Created at</FormLabel>
+        <Box>
+          <Typography>
+            {wasmMetadata
+              ? format(
+                  new Date(Number(wasmMetadata.created_timestamp) / 1_000_000),
+                  "MMM dd, yyyy HH:mm"
+                )
+              : "N/A"}
+          </Typography>
+        </Box>
+      </FormControl>
+      <FormControl>
+        <FormLabel>Updated at</FormLabel>
+        <Box>
+          <Typography>
+            {wasmMetadata
+              ? format(
+                  new Date(
+                    Number(wasmMetadata.latest_update_timestamp) / 1_000_000
+                  ),
+                  "MMM dd, yyyy HH:mm"
+                )
+              : "N/A"}
+          </Typography>
+        </Box>
       </FormControl>
     </Box>
   );
