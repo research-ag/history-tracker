@@ -1,3 +1,5 @@
+import { Principal } from "@dfinity/principal";
+
 import { ExtendedChange } from "@declarations/history_be/history_be.did";
 
 export const addGaps = (
@@ -166,4 +168,46 @@ export const getSummarySinceLastReset = (
   if (gapsExist(changes)) return "gaps";
   if (!baseChangeIsTracked) return "incomplete";
   return "complete";
+};
+
+export const getHistoryControllers = (
+  changes: Array<ExtendedChange>
+): Array<Principal> => {
+  const controllers: Array<Principal> = [];
+  const controllersMap: Record<string, true> = {};
+
+  for (const change of changes) {
+    let to_add: Array<Principal> = [];
+    if ("creation" in change.details) {
+      to_add = [...change.details.creation.controllers];
+    }
+    if ("controllers_change" in change.details) {
+      to_add = [...change.details.controllers_change.controllers];
+    }
+    for (const p of to_add) {
+      if (controllersMap[p.toText()]) continue;
+      controllers.push(p);
+      controllersMap[p.toText()] = true;
+    }
+  }
+
+  return [...controllers].sort((a, b) => {
+    const result = a.compareTo(b);
+    if (result == "eq") return 0;
+    if (result == "gt") return 1;
+    if (result == "lt") return -1;
+    return 0;
+  });
+};
+
+export const mergePrincipals = (...arr: Array<Array<Principal>>) => {
+  const principalsMap: Record<string, true> = {};
+  const merged = [];
+  const concatenated = arr.flat();
+  for (const p of concatenated) {
+    if (principalsMap[p.toText()]) continue;
+    merged.push(p);
+    principalsMap[p.toText()] = true;
+  }
+  return merged;
 };

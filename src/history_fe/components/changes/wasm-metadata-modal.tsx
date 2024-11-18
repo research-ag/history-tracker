@@ -5,6 +5,7 @@ import {
   Typography,
   Select,
   Option,
+  ListSubheader,
 } from "@mui/joy";
 import { Principal } from "@dfinity/principal";
 
@@ -17,21 +18,31 @@ interface WasmMetadataModalProps {
   metadataMap: Record<string, Array<Principal>>;
   isOpen: boolean;
   onClose: () => void;
+  metadataSources: {
+    customSources: Array<Principal>;
+    activeControllers: Array<Principal>;
+    historyControllers: Array<Principal>;
+  };
 }
 
 const WasmMetadataModal = ({
   moduleHash,
+  metadataMap,
   isOpen,
   onClose,
-  metadataMap,
+  metadataSources,
 }: WasmMetadataModalProps) => {
   const principalsWithMetadata = moduleHash
     ? metadataMap[moduleHash.join(",")]
     : [];
 
-  const [selectedPrincipal, setSelectedPrincipal] = useState<Principal | null>(
-    null
-  );
+  const [selectedPrincipalText, setSelectedPrincipalText] = useState<
+    string | null
+  >(null);
+
+  const selectedPrincipal = selectedPrincipalText
+    ? Principal.fromText(selectedPrincipalText.split("_")[1])
+    : null;
 
   const { data: wasmMetadata = null } = useFindWasmMetadata(
     {
@@ -41,15 +52,42 @@ const WasmMetadataModal = ({
     !!selectedPrincipal && !!moduleHash
   );
 
+  const principalsMap = principalsWithMetadata.reduce<Record<string, true>>(
+    (acc, p) => ({
+      ...acc,
+      [p.toText()]: true,
+    }),
+    {}
+  );
+
+  const filterPrincipals = (principals: Array<Principal>) =>
+    principals.filter((p) => principalsMap[p.toText()]);
+
+  const metadataGroups = {
+    customSources: filterPrincipals(metadataSources.customSources),
+    activeControllers: filterPrincipals(metadataSources.activeControllers),
+    historyControllers: filterPrincipals(metadataSources.historyControllers),
+  };
+
   useEffect(() => {
-    if (moduleHash) {
-      setSelectedPrincipal(principalsWithMetadata[0] ?? null);
+    // Preselect principal
+    if (moduleHash && principalsWithMetadata[0]) {
+      for (const key of [
+        "customSources",
+        "activeControllers",
+        "historyControllers",
+      ] as (keyof typeof metadataGroups)[]) {
+        if (metadataGroups[key][0]) {
+          setSelectedPrincipalText(`${key}_${metadataGroups[key][0].toText()}`);
+          break;
+        }
+      }
     }
   }, [moduleHash]);
 
   useEffect(() => {
     if (!isOpen) {
-      setSelectedPrincipal(null);
+      setSelectedPrincipalText(null);
     }
   }, [isOpen]);
 
@@ -59,11 +97,39 @@ const WasmMetadataModal = ({
         <ModalClose />
         <Typography level="h4">View Wasm metadata</Typography>
         <Select
-          value={selectedPrincipal}
-          onChange={(_, p) => setSelectedPrincipal(p)}
+          value={selectedPrincipalText}
+          onChange={(_, value) => setSelectedPrincipalText(value)}
         >
-          {principalsWithMetadata.map((p) => (
-            <Option key={p.toText()} value={p}>
+          <ListSubheader>
+            Custom sources ({metadataGroups.customSources.length})
+          </ListSubheader>
+          {metadataGroups.customSources.map((p) => (
+            <Option
+              key={`customSources_${p.toText()}`}
+              value={`customSources_${p.toText()}`}
+            >
+              {p.toText()}
+            </Option>
+          ))}
+          <ListSubheader>
+            Active controllers ({metadataGroups.activeControllers.length})
+          </ListSubheader>
+          {metadataGroups.activeControllers.map((p) => (
+            <Option
+              key={`activeControllers_${p.toText()}`}
+              value={`activeControllers_${p.toText()}`}
+            >
+              {p.toText()}
+            </Option>
+          ))}
+          <ListSubheader>
+            History controllers ({metadataGroups.historyControllers.length})
+          </ListSubheader>
+          {metadataGroups.historyControllers.map((p) => (
+            <Option
+              key={`historyControllers_${p.toText()}`}
+              value={`historyControllers_${p.toText()}`}
+            >
               {p.toText()}
             </Option>
           ))}

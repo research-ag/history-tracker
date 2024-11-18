@@ -20,7 +20,7 @@ import GapsRowContent from "./gap-row-content";
 import ActionCell from "./action-cell";
 import OriginCell from "./origin-cell";
 import WasmMetadataModal from "./wasm-metadata-modal";
-import { addGaps } from "./utils";
+import { addGaps, getHistoryControllers, mergePrincipals } from "./utils";
 
 const Changes = () => {
   const theme = useTheme();
@@ -36,7 +36,7 @@ const Changes = () => {
   >(null);
 
   const {
-    data: { moduleHash: actualModuleHash } = {
+    data: { moduleHash: actualModuleHash, controllers } = {
       moduleHash: "",
       controllers: [],
     },
@@ -44,13 +44,28 @@ const Changes = () => {
 
   const { metadataSources } = useMetadataSources();
 
+  const historyControllers = useMemo(
+    () => getHistoryControllers(data?.changes ?? []),
+    [data]
+  );
+
+  const allMetadataSources = useMemo(
+    () =>
+      mergePrincipals(
+        metadataSources,
+        controllers.map((c) => Principal.fromText(c)),
+        historyControllers
+      ),
+    [metadataSources, controllers, historyControllers]
+  );
+
   const moduleHashes = useMemo(
     () => extractModuleHashes(data?.changes ?? []),
     [data]
   );
 
   const { data: availableMetadata } = useAvailableMetadata({
-    principals: metadataSources,
+    principals: allMetadataSources,
     moduleHashes,
   });
 
@@ -191,6 +206,11 @@ const Changes = () => {
         isOpen={!!moduleHashToViewMetadata}
         onClose={() => {
           setModuleHashToViewMetadata(null);
+        }}
+        metadataSources={{
+          customSources: metadataSources,
+          activeControllers: controllers.map((c) => Principal.fromText(c)),
+          historyControllers,
         }}
       />
     </DashboardPageLayout>
