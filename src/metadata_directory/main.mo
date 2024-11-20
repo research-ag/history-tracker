@@ -48,6 +48,8 @@ actor class () = self {
   };
 
   public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
+    let is_valid = Blob.toArray(payload.module_hash).size();
+    if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
     let pr = switch (principalMap.get(storage, caller)) {
       case (?value) value;
       case (null) {
@@ -58,9 +60,7 @@ actor class () = self {
         pr_new;
       };
     };
-    let is_valid = Blob.toArray(payload.module_hash).size();
-    if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
-    if (blobMap.get(pr.wasm_metadata_storage, payload.module_hash) != null) throw Error.reject("The provided module hash already exists.");
+    if (blobMap.contains(pr.wasm_metadata_storage, payload.module_hash)) throw Error.reject("The provided module hash already exists.");
     pr.wasm_metadata_storage := blobMap.put(
       pr.wasm_metadata_storage,
       payload.module_hash,
@@ -75,10 +75,10 @@ actor class () = self {
   };
 
   public shared ({ caller }) func update_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
-    let ?pr = principalMap.get(storage, caller) else throw Error.reject("There is no metadata for the wasm module.");
-    let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, payload.module_hash) else throw Error.reject("There is no metadata for the wasm module.");
     let is_valid = Blob.toArray(payload.module_hash).size();
     if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
+    let ?pr = principalMap.get(storage, caller) else throw Error.reject("There is no metadata for the wasm module.");
+    let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, payload.module_hash) else throw Error.reject("There is no metadata for the wasm module.");
     pr.wasm_metadata_storage := blobMap.put(
       pr.wasm_metadata_storage,
       payload.module_hash,
