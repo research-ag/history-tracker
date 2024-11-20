@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   ModalDialog,
@@ -9,8 +10,8 @@ import {
 } from "@mui/joy";
 import { Principal } from "@dfinity/principal";
 
+import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
 import WasmMetadataView from "@fe/components/wasm-metadata-view";
-import { useEffect, useState } from "react";
 import { useFindWasmMetadata } from "@fe/integration";
 
 interface WasmMetadataModalProps {
@@ -20,7 +21,7 @@ interface WasmMetadataModalProps {
   onClose: () => void;
   metadataSources: {
     customSources: Array<Principal>;
-    activeControllers: Array<Principal>;
+    currentControllers: Array<Principal>;
     historyControllers: Array<Principal>;
   };
 }
@@ -40,17 +41,29 @@ const WasmMetadataModal = ({
     string | null
   >(null);
 
-  const selectedPrincipal = selectedPrincipalText
-    ? Principal.fromText(selectedPrincipalText.split("_")[1])
-    : null;
-
-  const { data: wasmMetadata = null } = useFindWasmMetadata(
+  const { data: foundWasmMetadata = [] } = useFindWasmMetadata(
     {
-      principal: selectedPrincipal!,
+      principals: principalsWithMetadata,
       moduleHash: moduleHash!,
     },
-    !!selectedPrincipal && !!moduleHash
+    !!moduleHash
   );
+
+  const wasmMetadataMap = useMemo(
+    () =>
+      foundWasmMetadata.reduce<Record<string, WasmMetadata>>(
+        (acc, [p, wasmMetadata]) => ({
+          ...acc,
+          [p.toText()]: wasmMetadata,
+        }),
+        {}
+      ),
+    [foundWasmMetadata]
+  );
+
+  const wasmMetadata = selectedPrincipalText
+    ? wasmMetadataMap[selectedPrincipalText.split("_")[1]] ?? null
+    : null;
 
   const principalsMap = principalsWithMetadata.reduce<Record<string, true>>(
     (acc, p) => ({
@@ -65,7 +78,7 @@ const WasmMetadataModal = ({
 
   const metadataGroups = {
     customSources: filterPrincipals(metadataSources.customSources),
-    activeControllers: filterPrincipals(metadataSources.activeControllers),
+    currentControllers: filterPrincipals(metadataSources.currentControllers),
     historyControllers: filterPrincipals(metadataSources.historyControllers),
   };
 
@@ -74,7 +87,7 @@ const WasmMetadataModal = ({
     if (moduleHash && principalsWithMetadata[0]) {
       for (const key of [
         "customSources",
-        "activeControllers",
+        "currentControllers",
         "historyControllers",
       ] as (keyof typeof metadataGroups)[]) {
         if (metadataGroups[key][0]) {
@@ -112,18 +125,19 @@ const WasmMetadataModal = ({
             </Option>
           ))}
           <ListSubheader>
-            Active controllers ({metadataGroups.activeControllers.length})
+            Current controllers ({metadataGroups.currentControllers.length})
           </ListSubheader>
-          {metadataGroups.activeControllers.map((p) => (
+          {metadataGroups.currentControllers.map((p) => (
             <Option
-              key={`activeControllers_${p.toText()}`}
-              value={`activeControllers_${p.toText()}`}
+              key={`currentControllers_${p.toText()}`}
+              value={`currentControllers_${p.toText()}`}
             >
               {p.toText()}
             </Option>
           ))}
           <ListSubheader>
-            History controllers ({metadataGroups.historyControllers.length})
+            All controllers from known history (
+            {metadataGroups.historyControllers.length})
           </ListSubheader>
           {metadataGroups.historyControllers.map((p) => (
             <Option

@@ -209,7 +209,7 @@ const Changes = () => {
         }}
         metadataSources={{
           customSources: metadataSources,
-          activeControllers: controllers.map((c) => Principal.fromText(c)),
+          currentControllers: controllers.map((c) => Principal.fromText(c)),
           historyControllers,
         }}
       />

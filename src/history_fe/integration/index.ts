@@ -364,7 +364,7 @@ export const useGetWasmMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["wasm-metadata", userPrincipal],
-    () => metadataDirectory.get_wasm_metadata(),
+    () => metadataDirectory.wasm_metadata([]),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the wasm metadata", {
@@ -389,11 +389,12 @@ export const useAddWasmMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     ({ moduleHash, description, buildInstructions }: AddWasmMetadataPayload) =>
-      metadataDirectory.add_wasm_metadata(
-        moduleHash,
-        typeof description !== "undefined" ? [description] : [],
-        typeof buildInstructions !== "undefined" ? [buildInstructions] : []
-      ),
+      metadataDirectory.add_wasm_metadata({
+        module_hash: moduleHash,
+        description: typeof description !== "undefined" ? [description] : [],
+        build_instructions:
+          typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+      }),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
@@ -428,11 +429,12 @@ export const useUpdateWasmMetadata = () => {
       description,
       buildInstructions,
     }: UpdateWasmMetadataPayload) =>
-      metadataDirectory.update_wasm_metadata(
-        moduleHash,
-        typeof description !== "undefined" ? [description] : [],
-        typeof buildInstructions !== "undefined" ? [buildInstructions] : []
-      ),
+      metadataDirectory.update_wasm_metadata({
+        module_hash: moduleHash,
+        description: typeof description !== "undefined" ? [description] : [],
+        build_instructions:
+          typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+      }),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
@@ -450,19 +452,23 @@ export const useUpdateWasmMetadata = () => {
 };
 
 interface FindWasmMetadataPayload {
-  principal: Principal;
+  principals: Array<Principal>;
   moduleHash: Uint8Array | number[];
 }
 
 export const useFindWasmMetadata = (
-  { principal, moduleHash }: FindWasmMetadataPayload,
+  { principals, moduleHash }: FindWasmMetadataPayload,
   enabled?: boolean
 ) => {
   const { metadataDirectory } = useMetadataDirectory();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
-    ["found-wasm-metadata", principal?.toText(), moduleHash?.join(",")],
-    () => metadataDirectory.find_wasm_metadata(principal, moduleHash),
+    [
+      "found-wasm-metadata",
+      moduleHash?.join(","),
+      principals.map((p) => p.toText()).join(","),
+    ],
+    () => metadataDirectory.find_wasm_metadata(moduleHash, principals),
     {
       enabled,
       keepPreviousData: true,
