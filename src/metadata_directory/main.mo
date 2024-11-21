@@ -5,6 +5,7 @@ import Option "mo:base/Option";
 import Array "mo:base/Array";
 import OrderedMap "mo:base/OrderedMap";
 import Iter "mo:base/Iter";
+import Vector "mo:vector/Class";
 import Prim "mo:prim";
 
 actor class () = self {
@@ -97,17 +98,15 @@ actor class () = self {
   //
 
   public query func find_wasm_metadata(module_hash : Blob, principals : [Principal]) : async [(Principal, WasmMetadata)] {
-    Array.foldLeft<Principal, [(Principal, WasmMetadata)]>(
-      principals,
-      [],
-      func(acc, p) {
-        let ?pr = principalMap.get(storage, p) else return acc;
-        switch (blobMap.get(pr.wasm_metadata_storage, module_hash)) {
-          case (?wasm_metadata) Array.append(acc, [(p, wasm_metadata)]);
-          case (null) acc;
-        };
-      },
-    );
+    let result = Vector.Vector<(Principal, WasmMetadata)>();
+
+    label loop_1 for (p in Iter.fromArray(principals)) {
+      let ?pr = principalMap.get(storage, p) else continue loop_1;
+      let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, module_hash) else continue loop_1;
+      result.add((p, wasm_metadata));
+    };
+
+    Vector.toArray(result);
   };
 
   func calculate_wasm_metadata_size(wasm_metadata : WasmMetadata) : Nat {
@@ -117,46 +116,34 @@ actor class () = self {
     |> _ + wasm_metadata.build_instructions.size() // build_instructions
     |> _ + 8 // latest_update_timestamp
     |> _ + 8; // created_timestamp
-
   };
 
   public query func available_metadata(principals : [Principal], module_hashes : [Blob]) : async [(Principal, Blob, Nat)] {
-    Array.foldLeft<Principal, [(Principal, Blob, Nat)]>(
-      principals,
-      [],
-      func(acc, p) {
-        let ?pr = principalMap.get(storage, p) else return acc;
+    let result = Vector.Vector<(Principal, Blob, Nat)>();
 
-        // interpret [] as a wildcard
-        if (Array.size(module_hashes) == 0) {
-          return pr.wasm_metadata_storage
-          |> blobMap.vals(_)
-          |> Iter.map<WasmMetadata, (Principal, Blob, Nat)>(
-            _,
-            func(wasm_metadata) {
-              wasm_metadata
-              |> (p, _.module_hash, calculate_wasm_metadata_size(_));
-            },
-          )
-          |> Iter.toArray(_)
-          |> Array.append(acc, _);
+    label loop_1 for (p in Iter.fromArray(principals)) {
+      let ?pr = principalMap.get(storage, p) else continue loop_1;
+
+      // interpret [] as a wildcard
+      if (Array.size(module_hashes) == 0) {
+        let iter = blobMap.vals(pr.wasm_metadata_storage);
+        for (wasm_metadata in iter) {
+          wasm_metadata
+          |> (p, _.module_hash, calculate_wasm_metadata_size(_))
+          |> result.add(_);
         };
+        continue loop_1;
+      };
 
-        Array.foldLeft<Blob, [(Principal, Blob, Nat)]>(
-          module_hashes,
-          [],
-          func(acc_2, module_hash) {
-            switch (blobMap.get(pr.wasm_metadata_storage, module_hash)) {
-              case (?wasm_metadata) {
-                [(p, module_hash, calculate_wasm_metadata_size(wasm_metadata))]
-                |> Array.append(acc_2, _);
-              };
-              case (null) acc_2;
-            };
-          },
-        )
-        |> Array.append(acc, _);
-      },
-    );
+      // general case
+      label loop_2 for (module_hash in Iter.fromArray(module_hashes)) {
+        let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, module_hash) else continue loop_2;
+        wasm_metadata
+        |> (p, _.module_hash, calculate_wasm_metadata_size(_))
+        |> result.add(_);
+      };
+    };
+
+    Vector.toArray(result);
   };
 };
