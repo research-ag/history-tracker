@@ -37,6 +37,11 @@ const ConnectButton = ({ sx }: ConnectButtonProps) => {
         const identity = authClient.getIdentity();
         setIdentity(identity);
       },
+      derivationOrigin:
+        process.env.DFX_NETWORK === "ic"
+          ? "https://wugbx-viaaa-aaaao-a3rcq-cai.icp0.io"
+          : undefined,
+      maxTimeToLive: BigInt(30) * BigInt(3_600_000_000_000),
       identityProvider:
         process.env.DFX_NETWORK === "ic" ||
         process.env.DFX_NETWORK === "playground"
