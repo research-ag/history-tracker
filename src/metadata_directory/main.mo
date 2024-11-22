@@ -5,6 +5,7 @@ import Option "mo:base/Option";
 import Array "mo:base/Array";
 import OrderedMap "mo:base/OrderedMap";
 import Iter "mo:base/Iter";
+import Nat "mo:base/Nat";
 import Vector "mo:vector/Class";
 import Prim "mo:prim";
 
@@ -48,9 +49,28 @@ actor class () = self {
     |> Iter.toArray(_);
   };
 
-  public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
+  func validate_change_payload(payload : WasmMetadataChangePayload) : async* () {
     let is_valid = Blob.toArray(payload.module_hash).size();
     if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
+
+    func validate_maximum_length(text : ?Text, max : Nat) : async* () {
+      switch (text) {
+        case (?value) {
+          if (value.size() > max) {
+            let error_msg = "Description exceeds the maximum allowed length of " # Nat.toText(max) # " characters.";
+            throw Error.reject(error_msg);
+          };
+        };
+        case (null) {};
+      };
+    };
+
+    await* validate_maximum_length(payload.description, 100);
+    await* validate_maximum_length(payload.build_instructions, 1000);
+  };
+
+  public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
+    await* validate_change_payload(payload);
     let pr = switch (principalMap.get(storage, caller)) {
       case (?value) value;
       case (null) {
@@ -76,8 +96,7 @@ actor class () = self {
   };
 
   public shared ({ caller }) func update_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
-    let is_valid = Blob.toArray(payload.module_hash).size();
-    if (is_valid != 32) throw Error.reject("Provided module hash is not valid.");
+    await* validate_change_payload(payload);
     let ?pr = principalMap.get(storage, caller) else throw Error.reject("There is no metadata for the wasm module.");
     let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, payload.module_hash) else throw Error.reject("There is no metadata for the wasm module.");
     pr.wasm_metadata_storage := blobMap.put(
