@@ -44,69 +44,54 @@ const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
 
 const getBackendFromCache = memoize<ActorSubclass<_SERVICE>>();
 export const useHistoryBackend = () => {
-  const { identity } = useIdentity();
+  const { httpAgent, uniqueKey } = useHttpAgent();
   const backend = getBackendFromCache(
-    () =>
-      createActor(canisterId, {
-        agentOptions: {
-          identity,
-          verifyQuerySignatures: false,
-        },
-      }),
-    [identity.getPrincipal().toText()]
+    () => createActor(canisterId, { agent: httpAgent }),
+    [uniqueKey]
   );
   return { backend };
 };
 
 const getMetadataDirectoryFromCache = memoize<ActorSubclass<MD_SERVICE>>();
 export const useMetadataDirectory = () => {
-  const { identity } = useIdentity();
+  const { httpAgent, uniqueKey } = useHttpAgent();
   const metadataDirectory = getMetadataDirectoryFromCache(
     () =>
       metadataDirectoryCreateActor(metadataDirectoryCanisterId, {
-        agentOptions: {
-          identity,
-          verifyQuerySignatures: false,
-        },
+        agent: httpAgent,
       }),
-    [identity.getPrincipal().toText()]
+    [uniqueKey]
   );
   return { metadataDirectory };
 };
 
 const getManagementFromCache = memoize<ActorSubclass<MANAGEMENT_SERVICE>>();
 export const useManagementCanister = () => {
-  const { identity } = useIdentity();
+  const { httpAgent, uniqueKey } = useHttpAgent();
   const management = getManagementFromCache(
     () =>
       Actor.createActor(managementIdlFactory, {
         canisterId: MANAGEMENT_CANISTER_ID,
-        agent: createHttpAgent(identity),
+        agent: httpAgent,
       }),
-    [identity.getPrincipal().toText()]
+    [uniqueKey]
   );
   return { management };
-};
-
-const createHttpAgent = (identity: Identity) => {
-  const agent = new HttpAgent({ identity, verifyQuerySignatures: false });
-  agent.fetchRootKey().catch((err) => {
-    console.warn(
-      "Unable to fetch root key. Check to ensure that your local replica is running"
-    );
-    console.error(err);
-  });
-  return agent;
 };
 
 const getHttpAgentFromCache = memoize<HttpAgent>();
 export const useHttpAgent = () => {
   const { identity } = useIdentity();
+  const uniqueKey = identity.getPrincipal().toText();
   const httpAgent = getHttpAgentFromCache(
-    () => createHttpAgent(identity),
-    [identity.getPrincipal().toText()]
+    () =>
+      HttpAgent.createSync({
+        identity,
+        verifyQuerySignatures: false,
+      }),
+    [uniqueKey]
   );
-  return httpAgent;
+  return { httpAgent, uniqueKey };
 };
 
 export const useGetIsCanisterTracked = (
@@ -155,7 +140,7 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
 };
 
 export const useReadState = (canisterId: Principal, enabled: boolean) => {
-  const agent = useHttpAgent();
+  const { httpAgent } = useHttpAgent();
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-module-hash", canisterId.toString()],
@@ -172,13 +157,13 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
         new TextEncoder().encode("controllers"),
       ];
 
-      const res = await agent.readState(canisterId.toString(), {
+      const res = await httpAgent.readState(canisterId.toString(), {
         paths: [moduleHashPath, controllersPath],
       });
 
       const cert = await Certificate.create({
         certificate: res.certificate,
-        rootKey: await agent.fetchRootKey(),
+        rootKey: await httpAgent.fetchRootKey(),
         canisterId,
       });
 

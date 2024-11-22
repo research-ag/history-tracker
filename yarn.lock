@@ -226,10 +226,10 @@
     "@babel/helper-validator-identifier" "^7.24.7"
     to-fast-properties "^2.0.0"
 
-"@dfinity/agent@^1.0.1":
-  version "1.4.0"
-  resolved "https://registry.yarnpkg.com/@dfinity/agent/-/agent-1.4.0.tgz#229c3d841912086095e87f3a58cfac49327dec2c"
-  integrity sha512-/zgGajZpxtbu+kLXtFx2e9V2+HbMUjrtGWx9ZEwtVwhVxKgVi/2kGQpFRPEDFJ461V7wdTwCig4OkMxVU4shTw==
+"@dfinity/agent@^2.1.3":
+  version "2.1.3"
+  resolved "https://registry.yarnpkg.com/@dfinity/agent/-/agent-2.1.3.tgz#7e9b4206436f7ddfc0465a6e492c65facade50d7"
+  integrity sha512-4XmqhFR3GQSUrmx7lMFx7DyHEhFkM6nz4O9FeYJ/WpkmPe8tulKaAfgWbWdTSCjbd8meCgKVHo+QYj+JHXagcw==
   dependencies:
     "@noble/curves" "^1.4.0"
     "@noble/hashes" "^1.3.1"

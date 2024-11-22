@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
+import { useQueryClient } from "react-query";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
 import { Alert, Box, LinearProgress, Table, useTheme } from "@mui/joy";
@@ -27,7 +28,9 @@ const Changes = () => {
 
   const { canisterId } = useParams();
 
-  const { data, isFetching, refetch } = useGetCanisterChanges(
+  const queryClient = useQueryClient();
+
+  const { data, isFetching } = useGetCanisterChanges(
     Principal.fromText(canisterId!)
   );
 
@@ -115,7 +118,9 @@ const Changes = () => {
         </Box>
       }
       onRefetch={() => {
-        refetch();
+        queryClient.invalidateQueries(["canister-changes"]);
+        queryClient.invalidateQueries(["available-metadata"]);
+        queryClient.invalidateQueries(["found-wasm-metadata"]);
       }}
       isFetching={isFetching}
     >
