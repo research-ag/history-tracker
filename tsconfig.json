@@ -20,9 +20,9 @@
     "paths": {
       "@declarations": ["./declarations"],
       "@declarations/*": ["./declarations/*"],
-      "@fe": ["./frontend"],
-      "@fe/*": ["./frontend/*"]
+      "@fe": ["./src/history_fe"],
+      "@fe/*": ["./src/history_fe/*"]
     }
   },
-  "include": ["frontend"]
+  "include": ["src/history_fe"]
 }
