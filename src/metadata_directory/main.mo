@@ -119,7 +119,7 @@ actor class () = self {
   public query func find_wasm_metadata(module_hash : Blob, principals : [Principal]) : async [(Principal, WasmMetadata)] {
     let result = Vector.Vector<(Principal, WasmMetadata)>();
 
-    label loop_1 for (p in Iter.fromArray(principals)) {
+    label loop_1 for (p in principals.vals()) {
       let ?pr = principalMap.get(storage, p) else continue loop_1;
       let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, module_hash) else continue loop_1;
       result.add((p, wasm_metadata));
@@ -140,7 +140,7 @@ actor class () = self {
   public query func available_metadata(principals : [Principal], module_hashes : [Blob]) : async [(Principal, Blob, Nat)] {
     let result = Vector.Vector<(Principal, Blob, Nat)>();
 
-    label loop_1 for (p in Iter.fromArray(principals)) {
+    label loop_1 for (p in principals.vals()) {
       let ?pr = principalMap.get(storage, p) else continue loop_1;
 
       // interpret [] as a wildcard
@@ -155,7 +155,7 @@ actor class () = self {
       };
 
       // general case
-      label loop_2 for (module_hash in Iter.fromArray(module_hashes)) {
+      label loop_2 for (module_hash in module_hashes.vals()) {
         let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, module_hash) else continue loop_2;
         wasm_metadata
         |> (p, _.module_hash, calculate_wasm_metadata_size(_))
