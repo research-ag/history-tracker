@@ -6,12 +6,23 @@ import Deque "mo:base/Deque";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Timer "mo:base/Timer";
+import Result "mo:base/Result";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
 
 import CanisterHistory "CanisterHistory";
 
 actor class HistoryTracker() = self {
+
+  module Errors {
+    public type Track = {
+      #AlreadyTracked : { message : Text };
+    };
+
+    public type Operation = {
+      #CanisterNotTracked : { message : Text };
+    };
+  };
 
   /// Number of canisters that are synchronized per iteration.
   let canisters_num_to_sync = 5;
@@ -44,52 +55,54 @@ actor class HistoryTracker() = self {
     history_storage_map.get(canister_id) != null;
   };
 
-  public func track(canister_id : Principal) : async () {
-    if (history_storage_map.get(canister_id) != null) throw Error.reject("The canister is already tracked.");
+  public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
+    if (history_storage_map.get(canister_id) != null) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_canister_history = CanisterHistory.CanisterHistory(canister_id);
-    await* new_canister_history.sync();
+    ignore await* new_canister_history.sync();
     history_storage.add(new_canister_history);
     let last_index : Nat = history_storage.size() - 1;
     history_storage_map.put(canister_id, last_index);
     sync_queue := Deque.pushBack(sync_queue, last_index);
+    #ok();
   };
 
-  public query func canister_changes(canister_id : Principal) : async CanisterHistory.CanisterChangesResponse {
+  public query func canister_changes(canister_id : Principal) : async Result.Result<CanisterHistory.CanisterChangesResponse, Errors.Operation> {
     switch (history_storage_map.get(canister_id)) {
-      case (null) throw Error.reject("The canister is not tracked.");
+      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
       case (?index) {
         let history = history_storage.get(index);
-        history.canister_changes();
+        #ok(history.canister_changes());
       };
     };
   };
 
-  public query func canister_state(canister_id : Principal) : async CanisterHistory.CanisterStateResponse {
+  public query func canister_state(canister_id : Principal) : async Result.Result<CanisterHistory.CanisterStateResponse, Errors.Operation> {
     switch (history_storage_map.get(canister_id)) {
-      case (null) throw Error.reject("The canister is not tracked.");
+      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
       case (?index) {
         let history = history_storage.get(index);
-        history.canister_state();
+        #ok(history.canister_state());
       };
     };
   };
 
-  public query func metadata(canister_id : Principal) : async CanisterHistory.SharedCanisterMetadata {
+  public query func metadata(canister_id : Principal) : async Result.Result<CanisterHistory.SharedCanisterMetadata, Errors.Operation> {
     switch (history_storage_map.get(canister_id)) {
-      case (null) throw Error.reject("The canister is not tracked.");
+      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
       case (?index) {
         let history = history_storage.get(index);
-        history.metadata();
+        #ok(history.metadata());
       };
     };
   };
 
-  public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async () {
+  public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.Operation> {
     switch (history_storage_map.get(canister_id)) {
-      case (null) throw Error.reject("The canister is not tracked.");
+      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
       case (?index) {
         let history = history_storage.get(index);
         await* history.update_metadata(caller, name, description);
+        #ok();
       };
     };
   };

@@ -22,7 +22,11 @@ import { _SERVICE as MD_SERVICE } from "@declarations/metadata_directory/metadat
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
 import { useIdentity } from "./identity";
-import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
+import {
+  arrayBufferToHex,
+  parseUint8ArrayToText,
+  resolveResult,
+} from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
 export const METADATA_DIRECTORY_BACKEND_CANISTER_ID =
@@ -109,18 +113,21 @@ export const useGetIsCanisterTracked = (
 export const useTrack = () => {
   const { backend } = useHistoryBackend();
   const { enqueueSnackbar } = useSnackbar();
-  return useMutation((canisterId: Principal) => backend.track(canisterId), {
-    onSuccess: () => {
-      enqueueSnackbar("The canister has been successfully registered", {
-        variant: "success",
-      });
-    },
-    onError: () => {
-      enqueueSnackbar("Failed to register the canister", {
-        variant: "error",
-      });
-    },
-  });
+  return useMutation(
+    (canisterId: Principal) => backend.track(canisterId).then(resolveResult),
+    {
+      onSuccess: () => {
+        enqueueSnackbar("The canister has been successfully registered", {
+          variant: "success",
+        });
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to register the canister", {
+          variant: "error",
+        });
+      },
+    }
+  );
 };
 
 export const useGetCanisterChanges = (canisterId: Principal) => {
@@ -128,7 +135,7 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-changes", canisterId.toString()],
-    () => backend.canister_changes(canisterId),
+    () => backend.canister_changes(canisterId).then(resolveResult),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister changes", {
@@ -233,7 +240,7 @@ export const useGetCanisterMetadata = (canisterId: Principal) => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-metadata", canisterId.toString()],
-    () => backend.metadata(canisterId),
+    () => backend.metadata(canisterId).then(resolveResult),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister metadata", {
@@ -256,11 +263,13 @@ export const useUpdateCanisterMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     ({ canisterId, name, description }: UpdateCanisterMetadataPayload) =>
-      backend.update_metadata(
-        canisterId,
-        typeof name !== "undefined" ? [name] : [],
-        typeof description !== "undefined" ? [description] : []
-      ),
+      backend
+        .update_metadata(
+          canisterId,
+          typeof name !== "undefined" ? [name] : [],
+          typeof description !== "undefined" ? [description] : []
+        )
+        .then(resolveResult),
     {
       onSuccess: (_, { canisterId }) => {
         queryClient.invalidateQueries([
@@ -374,12 +383,14 @@ export const useAddWasmMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     ({ moduleHash, description, buildInstructions }: AddWasmMetadataPayload) =>
-      metadataDirectory.add_wasm_metadata({
-        module_hash: moduleHash,
-        description: typeof description !== "undefined" ? [description] : [],
-        build_instructions:
-          typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
-      }),
+      metadataDirectory
+        .add_wasm_metadata({
+          module_hash: moduleHash,
+          description: typeof description !== "undefined" ? [description] : [],
+          build_instructions:
+            typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+        })
+        .then(resolveResult),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
@@ -414,12 +425,14 @@ export const useUpdateWasmMetadata = () => {
       description,
       buildInstructions,
     }: UpdateWasmMetadataPayload) =>
-      metadataDirectory.update_wasm_metadata({
-        module_hash: moduleHash,
-        description: typeof description !== "undefined" ? [description] : [],
-        build_instructions:
-          typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
-      }),
+      metadataDirectory
+        .update_wasm_metadata({
+          module_hash: moduleHash,
+          description: typeof description !== "undefined" ? [description] : [],
+          build_instructions:
+            typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+        })
+        .then(resolveResult),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
