@@ -6,6 +6,7 @@ import Array "mo:base/Array";
 import OrderedMap "mo:base/OrderedMap";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
+import Result "mo:base/Result";
 import Vector "mo:vector/Class";
 import Prim "mo:prim";
 
@@ -23,6 +24,16 @@ actor class () = self {
     module_hash : Blob;
     description : ?Text;
     build_instructions : ?Text;
+  };
+
+  module Errors {
+    public type AddWasmMetadata = {
+      #ModuleHashAlreadyExists : { message : Text };
+    };
+
+    public type UpdateWasmMetadata = {
+      #NoWasmMetadata : { message : Text };
+    };
   };
 
   public type PrincipalRecord = {
@@ -69,7 +80,7 @@ actor class () = self {
     await* validate_maximum_length(payload.build_instructions, 1000);
   };
 
-  public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
+  public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async Result.Result<(), Errors.AddWasmMetadata> {
     await* validate_change_payload(payload);
     let pr = switch (principalMap.get(storage, caller)) {
       case (?value) value;
@@ -81,7 +92,7 @@ actor class () = self {
         pr_new;
       };
     };
-    if (blobMap.contains(pr.wasm_metadata_storage, payload.module_hash)) throw Error.reject("The provided module hash already exists.");
+    if (blobMap.contains(pr.wasm_metadata_storage, payload.module_hash)) return #err(#ModuleHashAlreadyExists({ message = "The provided module hash already exists." }));
     pr.wasm_metadata_storage := blobMap.put(
       pr.wasm_metadata_storage,
       payload.module_hash,
@@ -93,12 +104,13 @@ actor class () = self {
         created_timestamp = Prim.time();
       },
     );
+    #ok();
   };
 
-  public shared ({ caller }) func update_wasm_metadata(payload : WasmMetadataChangePayload) : async () {
+  public shared ({ caller }) func update_wasm_metadata(payload : WasmMetadataChangePayload) : async Result.Result<(), Errors.UpdateWasmMetadata> {
     await* validate_change_payload(payload);
-    let ?pr = principalMap.get(storage, caller) else throw Error.reject("There is no metadata for the wasm module.");
-    let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, payload.module_hash) else throw Error.reject("There is no metadata for the wasm module.");
+    let ?pr = principalMap.get(storage, caller) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
+    let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, payload.module_hash) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
     pr.wasm_metadata_storage := blobMap.put(
       pr.wasm_metadata_storage,
       payload.module_hash,
@@ -110,6 +122,7 @@ actor class () = self {
         created_timestamp = wasm_metadata.created_timestamp;
       },
     );
+    #ok();
   };
 
   //
