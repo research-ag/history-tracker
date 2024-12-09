@@ -5,14 +5,17 @@ import {
   ActorSubclass,
   Actor,
   HttpAgent,
-  Identity,
+  Cbor as cbor,
+  HashTree,
   Certificate,
   LookupStatus,
+  reconstruct,
 } from "@dfinity/agent";
 import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
+import { BLACKHOLE_CANISTERS } from "@fe/constants/blackholeCanisters";
 import {
   canisterId as metadataDirectoryCanisterId,
   createActor as metadataDirectoryCreateActor,
@@ -139,6 +142,74 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister changes", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface CertifiedTreeResult {
+  certificate: Uint8Array;
+  tree: Uint8Array;
+}
+
+interface AssetCanisterInterface {
+  certified_tree: (arg: Record<string, never>) => Promise<CertifiedTreeResult>;
+  list_authorized: () => Promise<Array<Principal>>;
+}
+
+type AssetCanisterActor = ActorSubclass<AssetCanisterInterface>;
+
+export const useAssetsInfo = (canisterId: Principal, enabled: boolean) => {
+  const { httpAgent } = useHttpAgent();
+  const { enqueueSnackbar } = useSnackbar();
+
+  const { data } = useReadState(canisterId, enabled);
+
+  return useQuery(
+    ["assets-root-hash", canisterId.toString()],
+    async () => {
+      const assetCanister = Actor.createActor<AssetCanisterActor>(
+        ({ IDL }) =>
+          IDL.Service({
+            certified_tree: IDL.Func(
+              [IDL.Record({})],
+              [
+                IDL.Record({
+                  certificate: IDL.Vec(IDL.Nat8),
+                  tree: IDL.Vec(IDL.Nat8),
+                }),
+              ],
+              ["query"]
+            ),
+            list_authorized: IDL.Func([], [IDL.Vec(IDL.Principal)]),
+          }),
+        { canisterId, agent: httpAgent }
+      );
+
+      const result = await assetCanister.certified_tree({});
+
+      const hashTree: HashTree = cbor.decode(new Uint8Array(result.tree));
+
+      const reconstructed = await reconstruct(hashTree);
+
+      const rootHash = arrayBufferToHex(reconstructed);
+
+      const authorized = await assetCanister.list_authorized();
+
+      const isUncontrollable = data!.controllers.every((c) =>
+        BLACKHOLE_CANISTERS.includes(c)
+      );
+
+      const isFrozen = authorized.length === 0 && isUncontrollable;
+
+      return { rootHash, isFrozen };
+    },
+    {
+      enabled: enabled && !!data,
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the assets root hash", {
           variant: "error",
         });
       },
