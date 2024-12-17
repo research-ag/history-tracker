@@ -2,7 +2,11 @@ import { useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { Box, LinearProgress } from "@mui/joy";
 
-import { useAssetsInfo, useReadState } from "@fe/integration";
+import {
+  useAssetsRootHash,
+  useAssetsFrozen,
+  useReadState,
+} from "@fe/integration";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 
@@ -17,10 +21,19 @@ const CurrentState = () => {
   const moduleHashName = mapModuleHash(data?.moduleHash ?? "");
 
   const {
-    data: assetsInfo,
-    isFetching: isAssetsInfoFetching,
-    refetch: refetchAssetsInfo,
-  } = useAssetsInfo(
+    data: assetsRootHash,
+    isFetching: isAssetsRootHashFetching,
+    refetch: refetchAssetsRootHash,
+  } = useAssetsRootHash(
+    Principal.fromText(canisterId!),
+    moduleHashName.includes("asset")
+  );
+
+  const {
+    data: assetsFrozen,
+    isFetching: isAssetsFrozenFetching,
+    refetch: refetchAssetsFrozen,
+  } = useAssetsFrozen(
     Principal.fromText(canisterId!),
     moduleHashName.includes("asset")
   );
@@ -30,7 +43,8 @@ const CurrentState = () => {
       title="State"
       onRefetch={() => {
         refetch();
-        refetchAssetsInfo();
+        refetchAssetsRootHash();
+        refetchAssetsFrozen();
       }}
       isFetching={isFetching}
     >
@@ -55,9 +69,9 @@ const CurrentState = () => {
               <Box sx={{ marginBottom: 1 }}>
                 <Box sx={{ fontWeight: 600 }}>Assets root hash:</Box>{" "}
                 <Box>
-                  {assetsInfo
-                    ? assetsInfo.rootHash
-                    : isAssetsInfoFetching
+                  {assetsRootHash
+                    ? assetsRootHash.rootHash
+                    : isAssetsRootHashFetching
                     ? "Loading..."
                     : "ERROR"}
                 </Box>
@@ -67,9 +81,9 @@ const CurrentState = () => {
                   Assets are frozen:
                 </Box>{" "}
                 <Box sx={{ display: "inline" }}>
-                  {assetsInfo
-                    ? String(assetsInfo.isFrozen)
-                    : isAssetsInfoFetching
+                  {assetsFrozen
+                    ? String(assetsFrozen.isFrozen)
+                    : isAssetsFrozenFetching
                     ? "Loading..."
                     : "ERROR"}
                 </Box>

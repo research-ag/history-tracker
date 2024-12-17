@@ -11,6 +11,7 @@ import {
   LookupStatus,
   reconstruct,
 } from "@dfinity/agent";
+import { IDL } from "@dfinity/candid";
 import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
@@ -161,7 +162,22 @@ interface AssetCanisterInterface {
 
 type AssetCanisterActor = ActorSubclass<AssetCanisterInterface>;
 
-export const useAssetsInfo = (canisterId: Principal, enabled: boolean) => {
+const assetsIdlFactory: IDL.InterfaceFactory = ({ IDL }) =>
+  IDL.Service({
+    certified_tree: IDL.Func(
+      [IDL.Record({})],
+      [
+        IDL.Record({
+          certificate: IDL.Vec(IDL.Nat8),
+          tree: IDL.Vec(IDL.Nat8),
+        }),
+      ],
+      ["query"]
+    ),
+    list_authorized: IDL.Func([], [IDL.Vec(IDL.Principal)]),
+  });
+
+export const useAssetsRootHash = (canisterId: Principal, enabled: boolean) => {
   const { httpAgent } = useHttpAgent();
   const { enqueueSnackbar } = useSnackbar();
 
@@ -171,30 +187,46 @@ export const useAssetsInfo = (canisterId: Principal, enabled: boolean) => {
     ["assets-root-hash", canisterId.toString()],
     async () => {
       const assetCanister = Actor.createActor<AssetCanisterActor>(
-        ({ IDL }) =>
-          IDL.Service({
-            certified_tree: IDL.Func(
-              [IDL.Record({})],
-              [
-                IDL.Record({
-                  certificate: IDL.Vec(IDL.Nat8),
-                  tree: IDL.Vec(IDL.Nat8),
-                }),
-              ],
-              ["query"]
-            ),
-            list_authorized: IDL.Func([], [IDL.Vec(IDL.Principal)]),
-          }),
+        assetsIdlFactory,
         { canisterId, agent: httpAgent }
       );
 
       const result = await assetCanister.certified_tree({});
 
-      const hashTree: HashTree = cbor.decode(new Uint8Array(result.tree));
+      const hashTree: HashTree = cbor.decode(
+        new Uint8Array(result.tree).buffer
+      );
 
       const reconstructed = await reconstruct(hashTree);
 
       const rootHash = arrayBufferToHex(reconstructed);
+
+      return { rootHash };
+    },
+    {
+      enabled: enabled && !!data,
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the assets root hash", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+export const useAssetsFrozen = (canisterId: Principal, enabled: boolean) => {
+  const { httpAgent } = useHttpAgent();
+  const { enqueueSnackbar } = useSnackbar();
+
+  const { data } = useReadState(canisterId, enabled);
+
+  return useQuery(
+    ["assets-frozen", canisterId.toString()],
+    async () => {
+      const assetCanister = Actor.createActor<AssetCanisterActor>(
+        assetsIdlFactory,
+        { canisterId, agent: httpAgent }
+      );
 
       const authorized = await assetCanister.list_authorized();
 
@@ -204,12 +236,12 @@ export const useAssetsInfo = (canisterId: Principal, enabled: boolean) => {
 
       const isFrozen = authorized.length === 0 && isUncontrollable;
 
-      return { rootHash, isFrozen };
+      return { isFrozen };
     },
     {
       enabled: enabled && !!data,
       onError: () => {
-        enqueueSnackbar("Failed to fetch the assets root hash", {
+        enqueueSnackbar("Failed to check if the assets are frozen", {
           variant: "error",
         });
       },
@@ -224,15 +256,15 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
     ["canister-module-hash", canisterId.toString()],
     async () => {
       const moduleHashPath: ArrayBuffer[] = [
-        new TextEncoder().encode("canister"),
-        canisterId.toUint8Array(),
-        new TextEncoder().encode("module_hash"),
+        new TextEncoder().encode("canister").buffer as ArrayBuffer,
+        canisterId.toUint8Array().buffer as ArrayBuffer,
+        new TextEncoder().encode("module_hash").buffer as ArrayBuffer,
       ];
 
       const controllersPath: ArrayBuffer[] = [
-        new TextEncoder().encode("canister"),
-        canisterId.toUint8Array(),
-        new TextEncoder().encode("controllers"),
+        new TextEncoder().encode("canister").buffer as ArrayBuffer,
+        canisterId.toUint8Array().buffer as ArrayBuffer,
+        new TextEncoder().encode("controllers").buffer as ArrayBuffer,
       ];
 
       const res = await httpAgent.readState(canisterId.toString(), {
@@ -404,7 +436,9 @@ export const useFetchCanisterLogs = (
       return data.canister_log_records.map((record) => ({
         idx: Number(record.idx),
         timestamp_nanos: record.timestamp_nanos,
-        content: parseUint8ArrayToText(record.content as Uint8Array),
+        content: parseUint8ArrayToText(
+          (record.content as Uint8Array).buffer as ArrayBuffer
+        ),
       }));
     },
     {
