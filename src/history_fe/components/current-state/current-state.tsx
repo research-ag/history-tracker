@@ -20,31 +20,29 @@ const CurrentState = () => {
 
   const moduleHashName = mapModuleHash(data?.moduleHash ?? "");
 
+  const isAssetCanister = moduleHashName.includes("asset");
+
   const {
     data: assetsRootHash,
     isFetching: isAssetsRootHashFetching,
     refetch: refetchAssetsRootHash,
-  } = useAssetsRootHash(
-    Principal.fromText(canisterId!),
-    moduleHashName.includes("asset")
-  );
+  } = useAssetsRootHash(Principal.fromText(canisterId!), isAssetCanister);
 
   const {
     data: assetsFrozen,
     isFetching: isAssetsFrozenFetching,
     refetch: refetchAssetsFrozen,
-  } = useAssetsFrozen(
-    Principal.fromText(canisterId!),
-    moduleHashName.includes("asset")
-  );
+  } = useAssetsFrozen(Principal.fromText(canisterId!), isAssetCanister);
 
   return (
     <DashboardPageLayout
       title="State"
       onRefetch={() => {
         refetch();
-        refetchAssetsRootHash();
-        refetchAssetsFrozen();
+        if (isAssetCanister) {
+          refetchAssetsRootHash();
+          refetchAssetsFrozen();
+        }
       }}
       isFetching={isFetching}
     >
@@ -64,7 +62,7 @@ const CurrentState = () => {
               <Box>{moduleHashName}</Box>
             </Box>
           )}
-          {moduleHashName.includes("asset") && (
+          {isAssetCanister && (
             <>
               <Box sx={{ marginBottom: 1 }}>
                 <Box sx={{ fontWeight: 600 }}>Assets root hash:</Box>{" "}
