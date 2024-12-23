@@ -5,6 +5,7 @@ import Iter "mo:base/Iter";
 import Error "mo:base/Error";
 import Nat "mo:base/Nat";
 import Array "mo:base/Array";
+import Bool "mo:base/Bool";
 import Prim "mo:prim";
 
 import IC "ic"
@@ -91,8 +92,10 @@ module {
 
     var sync_ongoing = false;
 
-    public func sync() : async* () {
-      if (sync_ongoing) throw Error.reject("Synchronization is already in progress.");
+    /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
+    /// If there is an ongoing sync, then new one is not starting.
+    public func sync() : async* Bool {
+      if (sync_ongoing) return false;
 
       sync_ongoing := true;
 
@@ -126,6 +129,8 @@ module {
       internal_state.sync_version += 1;
 
       sync_ongoing := false;
+
+      true;
     };
 
     public func canister_changes() : CanisterChangesResponse {

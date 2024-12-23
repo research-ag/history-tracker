@@ -5,14 +5,18 @@ import {
   ActorSubclass,
   Actor,
   HttpAgent,
-  Identity,
+  Cbor as cbor,
+  HashTree,
   Certificate,
   LookupStatus,
+  reconstruct,
 } from "@dfinity/agent";
+import { IDL } from "@dfinity/candid";
 import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
 import { _SERVICE } from "@declarations/history_be/history_be.did";
+import { BLACKHOLE_CANISTERS } from "@fe/constants/blackholeCanisters";
 import {
   canisterId as metadataDirectoryCanisterId,
   createActor as metadataDirectoryCreateActor,
@@ -22,7 +26,12 @@ import { _SERVICE as MD_SERVICE } from "@declarations/metadata_directory/metadat
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
 import { useIdentity } from "./identity";
-import { arrayBufferToHex, parseUint8ArrayToText } from "./utils";
+import {
+  arrayBufferToHex,
+  parseUint8ArrayToText,
+  resolveDataOrNullError,
+  resolveResult,
+} from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
 export const METADATA_DIRECTORY_BACKEND_CANISTER_ID =
@@ -109,18 +118,21 @@ export const useGetIsCanisterTracked = (
 export const useTrack = () => {
   const { backend } = useHistoryBackend();
   const { enqueueSnackbar } = useSnackbar();
-  return useMutation((canisterId: Principal) => backend.track(canisterId), {
-    onSuccess: () => {
-      enqueueSnackbar("The canister has been successfully registered", {
-        variant: "success",
-      });
-    },
-    onError: () => {
-      enqueueSnackbar("Failed to register the canister", {
-        variant: "error",
-      });
-    },
-  });
+  return useMutation(
+    (canisterId: Principal) => backend.track(canisterId).then(resolveResult),
+    {
+      onSuccess: () => {
+        enqueueSnackbar("The canister has been successfully registered", {
+          variant: "success",
+        });
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to register the canister", {
+          variant: "error",
+        });
+      },
+    }
+  );
 };
 
 export const useGetCanisterChanges = (canisterId: Principal) => {
@@ -128,10 +140,109 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-changes", canisterId.toString()],
-    () => backend.canister_changes(canisterId),
+    () => backend.canister_changes(canisterId).then(resolveDataOrNullError),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister changes", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+interface CertifiedTreeResult {
+  certificate: Uint8Array;
+  tree: Uint8Array;
+}
+
+interface AssetCanisterInterface {
+  certified_tree: (arg: Record<string, never>) => Promise<CertifiedTreeResult>;
+  list_authorized: () => Promise<Array<Principal>>;
+}
+
+type AssetCanisterActor = ActorSubclass<AssetCanisterInterface>;
+
+const assetsIdlFactory: IDL.InterfaceFactory = ({ IDL }) =>
+  IDL.Service({
+    certified_tree: IDL.Func(
+      [IDL.Record({})],
+      [
+        IDL.Record({
+          certificate: IDL.Vec(IDL.Nat8),
+          tree: IDL.Vec(IDL.Nat8),
+        }),
+      ],
+      ["query"]
+    ),
+    list_authorized: IDL.Func([], [IDL.Vec(IDL.Principal)]),
+  });
+
+export const useAssetsRootHash = (canisterId: Principal, enabled: boolean) => {
+  const { httpAgent } = useHttpAgent();
+  const { enqueueSnackbar } = useSnackbar();
+
+  const { data } = useReadState(canisterId, enabled);
+
+  return useQuery(
+    ["assets-root-hash", canisterId.toString()],
+    async () => {
+      const assetCanister = Actor.createActor<AssetCanisterActor>(
+        assetsIdlFactory,
+        { canisterId, agent: httpAgent }
+      );
+
+      const result = await assetCanister.certified_tree({});
+
+      const hashTree: HashTree = cbor.decode(
+        new Uint8Array(result.tree).buffer
+      );
+
+      const reconstructed = await reconstruct(hashTree);
+
+      const rootHash = arrayBufferToHex(reconstructed);
+
+      return { rootHash };
+    },
+    {
+      enabled: enabled && !!data,
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the assets root hash", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+export const useAssetsFrozen = (canisterId: Principal, enabled: boolean) => {
+  const { httpAgent } = useHttpAgent();
+  const { enqueueSnackbar } = useSnackbar();
+
+  const { data } = useReadState(canisterId, enabled);
+
+  return useQuery(
+    ["assets-frozen", canisterId.toString()],
+    async () => {
+      const assetCanister = Actor.createActor<AssetCanisterActor>(
+        assetsIdlFactory,
+        { canisterId, agent: httpAgent }
+      );
+
+      const authorized = await assetCanister.list_authorized();
+
+      const isUncontrollable = data!.controllers.every((c) =>
+        BLACKHOLE_CANISTERS.includes(c)
+      );
+
+      const isFrozen = authorized.length === 0 && isUncontrollable;
+
+      return { isFrozen };
+    },
+    {
+      enabled: enabled && !!data,
+      onError: () => {
+        enqueueSnackbar("Failed to check if the assets are frozen", {
           variant: "error",
         });
       },
@@ -146,15 +257,15 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
     ["canister-module-hash", canisterId.toString()],
     async () => {
       const moduleHashPath: ArrayBuffer[] = [
-        new TextEncoder().encode("canister"),
-        canisterId.toUint8Array(),
-        new TextEncoder().encode("module_hash"),
+        new TextEncoder().encode("canister").buffer as ArrayBuffer,
+        canisterId.toUint8Array().buffer as ArrayBuffer,
+        new TextEncoder().encode("module_hash").buffer as ArrayBuffer,
       ];
 
       const controllersPath: ArrayBuffer[] = [
-        new TextEncoder().encode("canister"),
-        canisterId.toUint8Array(),
-        new TextEncoder().encode("controllers"),
+        new TextEncoder().encode("canister").buffer as ArrayBuffer,
+        canisterId.toUint8Array().buffer as ArrayBuffer,
+        new TextEncoder().encode("controllers").buffer as ArrayBuffer,
       ];
 
       const res = await httpAgent.readState(canisterId.toString(), {
@@ -233,7 +344,7 @@ export const useGetCanisterMetadata = (canisterId: Principal) => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-metadata", canisterId.toString()],
-    () => backend.metadata(canisterId),
+    () => backend.metadata(canisterId).then(resolveDataOrNullError),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister metadata", {
@@ -256,11 +367,13 @@ export const useUpdateCanisterMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     ({ canisterId, name, description }: UpdateCanisterMetadataPayload) =>
-      backend.update_metadata(
-        canisterId,
-        typeof name !== "undefined" ? [name] : [],
-        typeof description !== "undefined" ? [description] : []
-      ),
+      backend
+        .update_metadata(
+          canisterId,
+          typeof name !== "undefined" ? [name] : [],
+          typeof description !== "undefined" ? [description] : []
+        )
+        .then(resolveResult),
     {
       onSuccess: (_, { canisterId }) => {
         queryClient.invalidateQueries([
@@ -324,7 +437,9 @@ export const useFetchCanisterLogs = (
       return data.canister_log_records.map((record) => ({
         idx: Number(record.idx),
         timestamp_nanos: record.timestamp_nanos,
-        content: parseUint8ArrayToText(record.content as Uint8Array),
+        content: parseUint8ArrayToText(
+          (record.content as Uint8Array).buffer as ArrayBuffer
+        ),
       }));
     },
     {
@@ -374,12 +489,14 @@ export const useAddWasmMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     ({ moduleHash, description, buildInstructions }: AddWasmMetadataPayload) =>
-      metadataDirectory.add_wasm_metadata({
-        module_hash: moduleHash,
-        description: typeof description !== "undefined" ? [description] : [],
-        build_instructions:
-          typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
-      }),
+      metadataDirectory
+        .add_wasm_metadata({
+          module_hash: moduleHash,
+          description: typeof description !== "undefined" ? [description] : [],
+          build_instructions:
+            typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+        })
+        .then(resolveResult),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);
@@ -414,12 +531,14 @@ export const useUpdateWasmMetadata = () => {
       description,
       buildInstructions,
     }: UpdateWasmMetadataPayload) =>
-      metadataDirectory.update_wasm_metadata({
-        module_hash: moduleHash,
-        description: typeof description !== "undefined" ? [description] : [],
-        build_instructions:
-          typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
-      }),
+      metadataDirectory
+        .update_wasm_metadata({
+          module_hash: moduleHash,
+          description: typeof description !== "undefined" ? [description] : [],
+          build_instructions:
+            typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+        })
+        .then(resolveResult),
     {
       onSuccess: () => {
         queryClient.invalidateQueries(["wasm-metadata", userPrincipal]);

@@ -2,7 +2,11 @@ import { useParams } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
 import { Box, LinearProgress } from "@mui/joy";
 
-import { useReadState } from "@fe/integration";
+import {
+  useAssetsRootHash,
+  useAssetsFrozen,
+  useReadState,
+} from "@fe/integration";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 
@@ -14,11 +18,31 @@ const CurrentState = () => {
     true
   );
 
+  const moduleHashName = mapModuleHash(data?.moduleHash ?? "");
+
+  const isAssetCanister = moduleHashName.includes("asset");
+
+  const {
+    data: assetsRootHash,
+    isFetching: isAssetsRootHashFetching,
+    refetch: refetchAssetsRootHash,
+  } = useAssetsRootHash(Principal.fromText(canisterId!), isAssetCanister);
+
+  const {
+    data: assetsFrozen,
+    isFetching: isAssetsFrozenFetching,
+    refetch: refetchAssetsFrozen,
+  } = useAssetsFrozen(Principal.fromText(canisterId!), isAssetCanister);
+
   return (
     <DashboardPageLayout
       title="State"
       onRefetch={() => {
         refetch();
+        if (isAssetCanister) {
+          refetchAssetsRootHash();
+          refetchAssetsFrozen();
+        }
       }}
       isFetching={isFetching}
     >
@@ -32,11 +56,37 @@ const CurrentState = () => {
             <Box sx={{ fontWeight: 600 }}>Module hash:</Box>{" "}
             <Box>{data.moduleHash}</Box>
           </Box>
-          {mapModuleHash(data.moduleHash) && (
+          {moduleHashName && (
             <Box sx={{ marginBottom: 1 }}>
               <Box sx={{ fontWeight: 600 }}>Module hash is known as:</Box>{" "}
-              <Box>{mapModuleHash(data.moduleHash)}</Box>
+              <Box>{moduleHashName}</Box>
             </Box>
+          )}
+          {isAssetCanister && (
+            <>
+              <Box sx={{ marginBottom: 1 }}>
+                <Box sx={{ fontWeight: 600 }}>Assets root hash:</Box>{" "}
+                <Box>
+                  {assetsRootHash
+                    ? assetsRootHash.rootHash
+                    : isAssetsRootHashFetching
+                    ? "Loading..."
+                    : "ERROR"}
+                </Box>
+              </Box>
+              <Box sx={{ marginBottom: 1 }}>
+                <Box sx={{ display: "inline", fontWeight: 600 }}>
+                  Assets are frozen:
+                </Box>{" "}
+                <Box sx={{ display: "inline" }}>
+                  {assetsFrozen
+                    ? String(assetsFrozen.isFrozen)
+                    : isAssetsFrozenFetching
+                    ? "Loading..."
+                    : "ERROR"}
+                </Box>
+              </Box>
+            </>
           )}
           <Box>
             <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
