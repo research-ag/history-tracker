@@ -28,3 +28,10 @@ export const resolveResult = <
   }
   return result.ok;
 };
+
+export const resolveDataOrNullError = <T>(data: [] | [T]): T => {
+  if (data[0]) {
+    return data[0];
+  }
+  throw new Error();
+};

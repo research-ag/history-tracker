@@ -1,7 +1,6 @@
 import Principal "mo:base/Principal";
 import RBTree "mo:base/RBTree";
 import Iter "mo:base/Iter";
-import Error "mo:base/Error";
 import Deque "mo:base/Deque";
 import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
@@ -19,7 +18,7 @@ actor class HistoryTracker() = self {
       #AlreadyTracked : { message : Text };
     };
 
-    public type Operation = {
+    public type UpdateMetadata = {
       #CanisterNotTracked : { message : Text };
     };
   };
@@ -66,37 +65,37 @@ actor class HistoryTracker() = self {
     #ok();
   };
 
-  public query func canister_changes(canister_id : Principal) : async Result.Result<CanisterHistory.CanisterChangesResponse, Errors.Operation> {
+  public query func canister_changes(canister_id : Principal) : async ?CanisterHistory.CanisterChangesResponse {
     switch (history_storage_map.get(canister_id)) {
-      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
+      case (null) null;
       case (?index) {
         let history = history_storage.get(index);
-        #ok(history.canister_changes());
+        ?history.canister_changes();
       };
     };
   };
 
-  public query func canister_state(canister_id : Principal) : async Result.Result<CanisterHistory.CanisterStateResponse, Errors.Operation> {
+  public query func canister_state(canister_id : Principal) : async ?CanisterHistory.CanisterStateResponse {
     switch (history_storage_map.get(canister_id)) {
-      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
+      case (null) null;
       case (?index) {
         let history = history_storage.get(index);
-        #ok(history.canister_state());
+        ?history.canister_state();
       };
     };
   };
 
-  public query func metadata(canister_id : Principal) : async Result.Result<CanisterHistory.SharedCanisterMetadata, Errors.Operation> {
+  public query func metadata(canister_id : Principal) : async ?CanisterHistory.SharedCanisterMetadata {
     switch (history_storage_map.get(canister_id)) {
-      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
+      case (null) null;
       case (?index) {
         let history = history_storage.get(index);
-        #ok(history.metadata());
+        ?history.metadata();
       };
     };
   };
 
-  public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.Operation> {
+  public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.UpdateMetadata> {
     switch (history_storage_map.get(canister_id)) {
       case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
       case (?index) {

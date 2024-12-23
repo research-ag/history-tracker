@@ -29,6 +29,7 @@ import { useIdentity } from "./identity";
 import {
   arrayBufferToHex,
   parseUint8ArrayToText,
+  resolveDataOrNullError,
   resolveResult,
 } from "./utils";
 
@@ -139,7 +140,7 @@ export const useGetCanisterChanges = (canisterId: Principal) => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-changes", canisterId.toString()],
-    () => backend.canister_changes(canisterId).then(resolveResult),
+    () => backend.canister_changes(canisterId).then(resolveDataOrNullError),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister changes", {
@@ -343,7 +344,7 @@ export const useGetCanisterMetadata = (canisterId: Principal) => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["canister-metadata", canisterId.toString()],
-    () => backend.metadata(canisterId).then(resolveResult),
+    () => backend.metadata(canisterId).then(resolveDataOrNullError),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the canister metadata", {
