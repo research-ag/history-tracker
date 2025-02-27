@@ -53,8 +53,21 @@ const CurrentState = () => {
       ) : (
         <Box>
           <Box sx={{ marginBottom: 1 }}>
-            <Box sx={{ fontWeight: 600 }}>Module hash:</Box>{" "}
-            <Box>{data.moduleHash}</Box>
+            <Box
+              sx={{
+                fontWeight: 600,
+                ...(data.moduleHash === "Absent" && { display: "inline" }),
+              }}
+            >
+              Module hash:
+            </Box>{" "}
+            <Box
+              sx={{
+                ...(data.moduleHash === "Absent" && { display: "inline" }),
+              }}
+            >
+              {data.moduleHash}
+            </Box>
           </Box>
           {moduleHashName && (
             <Box sx={{ marginBottom: 1 }}>

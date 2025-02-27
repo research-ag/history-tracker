@@ -287,6 +287,8 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
       if (moduleHash.status === LookupStatus.Found) {
         const hex = arrayBufferToHex(moduleHash.value as ArrayBuffer);
         data.moduleHash = hex;
+      } else if (moduleHash.status === LookupStatus.Absent) {
+        data.moduleHash = "Absent";
       } else {
         throw new Error(`module_hash LookupStatus: ${moduleHash.status}`);
       }
