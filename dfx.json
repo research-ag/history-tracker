@@ -4,7 +4,10 @@
       "main": "./src/metadata_directory/main.mo",
       "type": "motoko",
       "declarations": {
-        "bindings": ["js", "ts"],
+        "bindings": [
+          "js",
+          "ts"
+        ],
         "output": "./declarations/metadata_directory"
       }
     },
@@ -12,14 +15,21 @@
       "main": "./src/history_be/main.mo",
       "type": "motoko",
       "declarations": {
-        "bindings": ["js", "ts"],
+        "bindings": [
+          "js",
+          "ts"
+        ],
         "output": "./declarations/history_be"
       }
     },
     "history_fe": {
       "type": "assets",
-      "dependencies": ["history_be"],
-      "source": ["dist/"],
+      "dependencies": [
+        "history_be"
+      ],
+      "source": [
+        "dist/"
+      ],
       "build": "npm run build:frontend",
       "declarations": {
         "output": "./declarations/history_fe"
@@ -48,7 +58,6 @@
       "packtool": "mops sources"
     }
   },
-  "dfx": "0.22.0",
   "version": 1,
   "output_env_file": ".env"
 }
