@@ -6,7 +6,6 @@ import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Timer "mo:base/Timer";
 import Result "mo:base/Result";
-import Bool "mo:base/Bool";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
 
