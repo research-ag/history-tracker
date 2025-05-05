@@ -6,10 +6,12 @@ import Nat "mo:base/Nat";
 import Debug "mo:base/Debug";
 import Timer "mo:base/Timer";
 import Result "mo:base/Result";
+import Bool "mo:base/Bool";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
 
 import CanisterHistory "CanisterHistory";
+import IC "ic"
 
 actor class HistoryTracker() = self {
 
@@ -109,6 +111,8 @@ actor class HistoryTracker() = self {
   func trigger_sync() : async* () {
     var ctr = 0;
     let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
+    let calls : Vec.Vector<(CanisterHistory.CanisterHistory, ?(async IC.CanisterInfoResponse), Nat)> = Vec.new();
+
     while (ctr < sync_num) {
       let (index, queue_after_pop) = switch (Deque.popFront(sync_queue)) {
         case (?v) v;
@@ -116,10 +120,28 @@ actor class HistoryTracker() = self {
       };
       sync_queue := queue_after_pop;
       let history = history_storage.get(index);
-      try { ignore async { await* history.sync() } } catch (_) {};
-      sync_queue := Deque.pushBack(sync_queue, index);
+      switch (history.schedule_sync_call()) {
+        case (?(ic, args)) Vec.add(calls, (history, ?ic.canister_info(args), index));
+        case (null) Vec.add(calls, (history, null, index));
+      };
       ctr += 1;
     };
+
+    for ((history, call_, index) in Vec.vals(calls)) {
+      switch (call_) {
+        case (?call) {
+          try {
+            let info = await call;
+            ignore history.handle_sync_response(?info);
+          } catch (_) {
+            ignore history.handle_sync_response(null);
+          };
+        };
+        case (null) {};
+      };
+      sync_queue := Deque.pushBack(sync_queue, index);
+    };
+
   };
 
   ignore Timer.recurringTimer<system>(

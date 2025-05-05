@@ -95,14 +95,30 @@ module {
     /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
     /// If there is an ongoing sync, then new one is not starting.
     public func sync() : async* Bool {
-      if (sync_ongoing) return false;
+      let ?(ic, args) = schedule_sync_call() else return false;
+      try {
+        let info = await ic.canister_info(args);
+        handle_sync_response(?info);
+      } catch (_) {
+        handle_sync_response(null);
+      };
+    };
 
+    public func schedule_sync_call() : ?(IC.Management, IC.CanisterInfoRequest) {
+      if (sync_ongoing) return null;
       sync_ongoing := true;
+      ?(
+        ic,
+        {
+          canister_id;
+          num_requested_changes = ?Nat64.fromNat(20);
+        },
+      );
+    };
 
-      let info = await ic.canister_info({
-        canister_id;
-        num_requested_changes = ?Nat64.fromNat(20);
-      });
+    public func handle_sync_response(response : ?IC.CanisterInfoResponse) : Bool {
+      sync_ongoing := false;
+      let ?info = response else return true;
 
       let changes_size = info.recent_changes.size();
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
@@ -127,8 +143,6 @@ module {
       internal_state.controllers := info.controllers;
       internal_state.timestamp_nanos := Prim.time();
       internal_state.sync_version += 1;
-
-      sync_ongoing := false;
 
       true;
     };
