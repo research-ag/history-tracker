@@ -6,9 +6,15 @@ interface InfoItemProps {
   label: string;
   content: string;
   withCopy?: boolean;
+  copyAlwaysLeft?: boolean; // workaround
 }
 
-const InfoItem = ({ label, content, withCopy }: InfoItemProps) => {
+const InfoItem = ({
+  label,
+  content,
+  withCopy,
+  copyAlwaysLeft,
+}: InfoItemProps) => {
   const timerID = useRef<NodeJS.Timeout | null>(null);
 
   const [isCopied, setIsCopied] = useState(false);
@@ -34,6 +40,7 @@ const InfoItem = ({ label, content, withCopy }: InfoItemProps) => {
               [theme.breakpoints.down("sm")]: {
                 order: 0,
               },
+              ...(copyAlwaysLeft && { order: 0 }),
             })}
             onClick={() => {
               const clipboardItem = new ClipboardItem({
