@@ -1,7 +1,18 @@
 import { useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Principal } from "@dfinity/principal";
-import { Box, Tabs, TabList, Tab, Button, Typography } from "@mui/joy";
+import {
+  Box,
+  Tabs,
+  TabList,
+  Tab,
+  Button,
+  Typography,
+  Select,
+  Option,
+  useTheme,
+} from "@mui/joy";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 import HomeIcon from "@mui/icons-material/Home";
 
 import Changes from "@fe/components/changes";
@@ -25,6 +36,10 @@ import {
 import { useTabManagement } from "./tabs-management";
 
 const Dashboard = () => {
+  const theme = useTheme();
+
+  const downMd = useMediaQuery(theme.breakpoints.down("md"));
+
   const { tabValue, setTabValue } = useTabManagement();
 
   const { identity } = useIdentity();
@@ -89,15 +104,29 @@ const Dashboard = () => {
         value={tabValue}
         onChange={(_, value) => setTabValue(value as number)}
       >
-        <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+        <Box
+          sx={(theme) => ({
+            display: "flex",
+            justifyContent: "flex-end",
+
+            [theme.breakpoints.down("sm")]: {
+              justifyContent: "flex-start",
+            },
+          })}
+        >
           <Box
-            sx={{
+            sx={(theme) => ({
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-end",
               gap: 0.5,
               marginBottom: 1,
-            }}
+
+              [theme.breakpoints.down("sm")]: {
+                alignItems: "flex-start",
+                marginBottom: 2,
+              },
+            })}
           >
             {callerIsController && (
               <Typography
@@ -130,18 +159,45 @@ const Dashboard = () => {
           sx={{
             display: "flex",
             alignItems: "center",
+            gap: 1,
+            flexWrap: "wrap",
             marginBottom: 2,
           }}
         >
-          <TabList sx={{ flexGrow: 1 }} variant="plain">
-            <Tab color="neutral">Canister changes</Tab>
-            <Tab color="neutral">Current state</Tab>
-            <Tab color="neutral">Metadata</Tab>
-            <Tab color="neutral">Manage</Tab>
-          </TabList>
-          <Link to="/">
+          {!downMd ? (
+            <TabList sx={{ flexGrow: 1 }} variant="plain">
+              <Tab color="neutral">Canister changes</Tab>
+              <Tab color="neutral">Current state</Tab>
+              <Tab color="neutral">Metadata</Tab>
+              <Tab color="neutral">Management</Tab>
+            </TabList>
+          ) : (
+            <Select
+              sx={(theme) => ({
+                flexShrink: "0",
+                width: "200px",
+                mr: "auto",
+
+                [theme.breakpoints.down("sm")]: {
+                  width: "100%",
+                },
+              })}
+              value={String(tabValue)}
+              onChange={(_, value) => setTabValue(Number(value))}
+            >
+              <Option value="0">Canister changes</Option>
+              <Option value="1">Current state</Option>
+              <Option value="2">Metadata</Option>
+              <Option value="3">Management</Option>
+            </Select>
+          )}
+          <Link style={{ display: "contents" }} to="/">
             <Button
-              sx={{ marginLeft: 1 }}
+              sx={(theme) => ({
+                [theme.breakpoints.down("sm")]: {
+                  flex: "1",
+                },
+              })}
               variant="solid"
               color="primary"
               startDecorator={<HomeIcon />}
@@ -149,8 +205,14 @@ const Dashboard = () => {
               Home
             </Button>
           </Link>
-          <ConnectButton sx={{ marginLeft: 1 }} />
-          <ThemeButton sx={{ marginLeft: 1 }} />
+          <ConnectButton
+            sx={(theme) => ({
+              [theme.breakpoints.down("sm")]: {
+                flex: "1",
+              },
+            })}
+          />
+          <ThemeButton />
         </Box>
         {tabValue === 0 && <Changes />}
         {tabValue === 1 && <CurrentState />}

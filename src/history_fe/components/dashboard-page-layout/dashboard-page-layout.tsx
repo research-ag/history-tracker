@@ -1,4 +1,12 @@
-import { Sheet, Box, Typography, Tooltip, IconButton } from "@mui/joy";
+import {
+  Sheet,
+  Box,
+  Typography,
+  Tooltip,
+  IconButton,
+  useTheme,
+} from "@mui/joy";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 import InfoIcon from "@mui/icons-material/Info";
 import RefreshIcon from "@mui/icons-material/Refresh";
 
@@ -19,6 +27,10 @@ const DashboardPageLayout = ({
   onRefetch,
   isFetching,
 }: DashboardPageLayoutProps) => {
+  const theme = useTheme();
+
+  const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
     <Sheet
       sx={{
@@ -33,7 +45,9 @@ const DashboardPageLayout = ({
       color="neutral"
     >
       <Box sx={{ display: "flex", alignItems: "center" }}>
-        <Typography level="h1">{title}</Typography>
+        <Typography level={!downSm ? "h1" : "h3"} component="h1">
+          {title}
+        </Typography>
         {!!noteTooltip && (
           <Tooltip title={noteTooltip}>
             <InfoIcon sx={{ marginLeft: 2 }} />
@@ -41,7 +55,11 @@ const DashboardPageLayout = ({
         )}
         {!!onRefetch && (
           <Tooltip title="Refresh page data">
-            <IconButton sx={{ marginLeft: 0.5 }} disabled={isFetching}>
+            <IconButton
+              sx={{ marginLeft: 2 }}
+              variant="soft"
+              disabled={isFetching}
+            >
               <RefreshIcon onClick={onRefetch} />
             </IconButton>
           </Tooltip>
