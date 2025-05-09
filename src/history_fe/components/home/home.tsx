@@ -74,7 +74,7 @@ const Home = () => {
         flexDirection: "column",
         width: "100%",
         maxWidth: "990px",
-        p: 4,
+        p: 2,
         mx: "auto",
       }}
     >
