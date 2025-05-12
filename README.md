@@ -1,4 +1,4 @@
-# History tracker
+# HistoryTracker
 
 A canister for canister history tracking.
 

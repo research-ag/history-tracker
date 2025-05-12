@@ -63,6 +63,7 @@ const CurrentState = () => {
             </Box>{" "}
             <Box
               sx={{
+                wordBreak: "break-word",
                 ...(data.moduleHash === "Absent" && { display: "inline" }),
               }}
             >

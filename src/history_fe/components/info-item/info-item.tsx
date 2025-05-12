@@ -6,9 +6,15 @@ interface InfoItemProps {
   label: string;
   content: string;
   withCopy?: boolean;
+  copyAlwaysLeft?: boolean; // workaround
 }
 
-const InfoItem = ({ label, content, withCopy }: InfoItemProps) => {
+const InfoItem = ({
+  label,
+  content,
+  withCopy,
+  copyAlwaysLeft,
+}: InfoItemProps) => {
   const timerID = useRef<NodeJS.Timeout | null>(null);
 
   const [isCopied, setIsCopied] = useState(false);
@@ -16,15 +22,26 @@ const InfoItem = ({ label, content, withCopy }: InfoItemProps) => {
   const copyTooltipTitle = isCopied ? "✓ Copied" : "Copy to clipboard";
 
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-      <Typography sx={{ fontWeight: 700 }} level="body-xs">
-        {label}:{" "}
+    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
+      <Typography sx={{ order: 1 }} level="body-xs">
+        <Box sx={{ fontWeight: 700 }} component="span">
+          {label}
+        </Box>
+        : {content}
       </Typography>
-      <Typography level="body-xs">{content}</Typography>
       {withCopy && (
         <Tooltip title={copyTooltipTitle} disableInteractive>
           <ContentCopyIcon
-            sx={{ fontSize: "16px", cursor: "pointer", marginLeft: 1 }}
+            sx={(theme) => ({
+              order: 2,
+              fontSize: "16px",
+              cursor: "pointer",
+              marginTop: "1px",
+              [theme.breakpoints.down("sm")]: {
+                order: 0,
+              },
+              ...(copyAlwaysLeft && { order: 0 }),
+            })}
             onClick={() => {
               const clipboardItem = new ClipboardItem({
                 "text/plain": new Blob([content], { type: "text/plain" }),

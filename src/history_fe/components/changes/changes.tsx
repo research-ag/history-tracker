@@ -3,7 +3,8 @@ import { useParams } from "react-router-dom";
 import { useQueryClient } from "react-query";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Alert, Box, LinearProgress, Table, useTheme } from "@mui/joy";
+import { Alert, Box, Divider, LinearProgress, Table, useTheme } from "@mui/joy";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
 import {
@@ -25,6 +26,9 @@ import { addGaps, getHistoryControllers, mergePrincipals } from "./utils";
 
 const Changes = () => {
   const theme = useTheme();
+
+  const downMd = useMediaQuery(theme.breakpoints.down("md"));
+  const downSm = useMediaQuery(theme.breakpoints.down("sm"));
 
   const { canisterId } = useParams();
 
@@ -99,8 +103,10 @@ const Changes = () => {
 
   return (
     <DashboardPageLayout
-      title="Changelog"
-      rightPart={<HistorySummarySection changes={data?.changes} />}
+      title="Changes"
+      rightPart={
+        !downSm ? <HistorySummarySection changes={data?.changes} /> : null
+      }
       noteTooltip={
         <Box sx={{ width: "400px" }}>
           <Box sx={{ marginBottom: 1 }}>
@@ -139,69 +145,166 @@ const Changes = () => {
                 </Alert>
               </Box>
             )}
-            <HistoryInfoLine data={data} />
-            <Table sx={{ "& tr": { height: "45px" } }}>
-              <colgroup>
-                <col style={{ width: "80px" }} />
-                <col style={{ width: "100px" }} />
-                <col />
-                <col />
-                <col style={{ width: "180px" }} />
-              </colgroup>
+            {downSm && <HistorySummarySection changes={data?.changes} />}
+            {downSm && <Divider sx={{ my: 1 }} orientation="horizontal" />}
+            <HistoryInfoLine sx={{ mb: 1 }} data={data} />
+            {!downSm && (
+              <Box
+                sx={{
+                  overflow: "auto",
+                  // scrollbarWidth: "thin",
+                  "&::-webkit-scrollbar": {
+                    width: 8,
+                    height: 8,
+                  },
+                  "&::-webkit-scrollbar-track": {
+                    backgroundColor: "var(--joy-palette-background-surface)",
+                  },
+                  "&::-webkit-scrollbar-thumb": {
+                    backgroundColor:
+                      "var(--joy-palette-neutral-outlinedBorder)",
+                    borderRadius: 4,
+                  },
+                }}
+              >
+                <Table
+                  sx={{
+                    "& tr": { height: "45px" },
+                  }}
+                >
+                  <colgroup>
+                    <col style={{ width: "80px" }} />
+                    <col style={{ width: "100px" }} />
+                    <col style={{ ...(downMd && { width: "266px" }) }} />
+                    <col style={{ ...(downMd && { width: "266px" }) }} />
+                    <col style={{ width: "180px" }} />
+                  </colgroup>
 
-              <thead>
-                <tr>
-                  <th>Index</th>
-                  <th>Version</th>
-                  <th>Action</th>
-                  <th>Origin</th>
-                  <th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {addGaps(data.changes)
+                  <thead>
+                    <tr>
+                      <th>Index</th>
+                      <th>Version</th>
+                      <th>Action</th>
+                      <th>Origin</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {addGaps(data.changes)
+                      .reverse()
+                      .map((change, i) => {
+                        if (typeof change == "number") {
+                          return (
+                            <tr
+                              style={{ background: theme.palette.warning[50] }}
+                              key={i}
+                            >
+                              <td colSpan={5}>
+                                <GapsRowContent gaps={change} />
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={change.timestamp_nanos}>
+                            <td>{Number(change.change_index)}</td>
+                            <td>{Number(change.canister_version)}</td>
+                            <td>
+                              <ActionCell
+                                change={change}
+                                metadataMap={metadataMap}
+                                onViewMetadata={setModuleHashToViewMetadata}
+                              />
+                            </td>
+                            <td>
+                              <OriginCell change={change} />
+                            </td>
+                            <td>
+                              {format(
+                                new Date(
+                                  Number(change.timestamp_nanos) / 1_000_000
+                                ),
+                                "MMM dd, yyyy HH:mm"
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </Table>
+              </Box>
+            )}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              {downSm &&
+                addGaps(data.changes)
                   .reverse()
                   .map((change, i) => {
                     if (typeof change == "number") {
-                      return (
-                        <tr
-                          style={{ background: theme.palette.warning[50] }}
-                          key={i}
-                        >
-                          <td colSpan={5}>
-                            <GapsRowContent gaps={change} />
-                          </td>
-                        </tr>
-                      );
+                      return <GapsRowContent key={i} gaps={change} />;
                     }
 
                     return (
-                      <tr key={change.timestamp_nanos}>
-                        <td>{Number(change.change_index)}</td>
-                        <td>{Number(change.canister_version)}</td>
-                        <td>
-                          {
-                            <ActionCell
-                              change={change}
-                              metadataMap={metadataMap}
-                              onViewMetadata={setModuleHashToViewMetadata}
-                            />
-                          }
-                        </td>
-                        <td>{<OriginCell change={change} />}</td>
-                        <td>
-                          {format(
-                            new Date(
-                              Number(change.timestamp_nanos) / 1_000_000
-                            ),
-                            "MMM dd, yyyy HH:mm"
-                          )}
-                        </td>
-                      </tr>
+                      <Box
+                        sx={(theme) => ({
+                          backgroundColor: theme.palette.background.level1,
+                          borderRadius: "8px",
+                        })}
+                        key={change.timestamp_nanos}
+                      >
+                        <Table
+                          sx={{
+                            "& tr": { height: "45px" },
+                            "& td:first-child": {
+                              fontWeight: 600,
+                            },
+                          }}
+                        >
+                          <colgroup>
+                            <col style={{ width: "110px" }} />
+                            <col />
+                          </colgroup>
+                          <tbody>
+                            <tr>
+                              <td>Index/Version</td>
+                              <td>
+                                {Number(change.change_index)}/
+                                {Number(change.canister_version)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Action</td>
+                              <td>
+                                <ActionCell
+                                  change={change}
+                                  metadataMap={metadataMap}
+                                  onViewMetadata={setModuleHashToViewMetadata}
+                                />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Origin</td>
+                              <td>
+                                <OriginCell change={change} />
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Date</td>
+                              <td>
+                                {format(
+                                  new Date(
+                                    Number(change.timestamp_nanos) / 1_000_000
+                                  ),
+                                  "MMM dd, yyyy HH:mm"
+                                )}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </Table>
+                      </Box>
                     );
                   })}
-              </tbody>
-            </Table>
+            </Box>
           </>
         )}
       </Box>
