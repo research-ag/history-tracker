@@ -102,6 +102,7 @@ module {
       } catch (_) {
         handle_sync_response(null);
       };
+      true;
     };
 
     public func schedule_sync_call() : ?(IC.Management, IC.CanisterInfoRequest) {
@@ -111,14 +112,14 @@ module {
         ic,
         {
           canister_id;
-          num_requested_changes = ?Nat64.fromNat(20);
+          num_requested_changes = ?20;
         },
       );
     };
 
-    public func handle_sync_response(response : ?IC.CanisterInfoResponse) : Bool {
+    public func handle_sync_response(response : ?IC.CanisterInfoResponse) {
       sync_ongoing := false;
-      let ?info = response else return true;
+      let ?info = response else return;
 
       let changes_size = info.recent_changes.size();
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
@@ -143,8 +144,6 @@ module {
       internal_state.controllers := info.controllers;
       internal_state.timestamp_nanos := Prim.time();
       internal_state.sync_version += 1;
-
-      true;
     };
 
     public func canister_changes() : CanisterChangesResponse {

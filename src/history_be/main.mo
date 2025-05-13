@@ -130,9 +130,9 @@ actor class HistoryTracker() = self {
     for ((history, call) in Vec.vals(calls)) {
       try {
         let info = await call;
-        ignore history.handle_sync_response(?info);
+        history.handle_sync_response(?info);
       } catch (_) {
-        ignore history.handle_sync_response(null);
+        history.handle_sync_response(null);
       };
     };
 
