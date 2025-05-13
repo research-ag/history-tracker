@@ -88,14 +88,14 @@ module {
       };
     };
 
-    let ic = actor "aaaaa-aa" : IC.Management;
+    public let ic = actor "aaaaa-aa" : IC.Management;
 
     var sync_ongoing = false;
 
     /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
     /// If there is an ongoing sync, then new one is not starting.
     public func sync() : async* Bool {
-      let ?(ic, args) = schedule_sync_call() else return false;
+      let ?args = schedule_sync_call() else return false;
       try {
         let info = await ic.canister_info(args);
         handle_sync_response(?info);
@@ -105,16 +105,13 @@ module {
       true;
     };
 
-    public func schedule_sync_call() : ?(IC.Management, IC.CanisterInfoRequest) {
+    public func schedule_sync_call() : ?IC.CanisterInfoRequest {
       if (sync_ongoing) return null;
       sync_ongoing := true;
-      ?(
-        ic,
-        {
-          canister_id;
-          num_requested_changes = ?20;
-        },
-      );
+      ?{
+        canister_id;
+        num_requested_changes = ?20;
+      };
     };
 
     public func handle_sync_response(response : ?IC.CanisterInfoResponse) {

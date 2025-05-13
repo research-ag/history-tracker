@@ -120,7 +120,7 @@ actor class HistoryTracker() = self {
       sync_queue := queue_after_pop;
       let history = history_storage.get(index);
       switch (history.schedule_sync_call()) {
-        case (?(ic, args)) Vec.add(calls, (history, ic.canister_info(args)));
+        case (?args) Vec.add(calls, (history, history.ic.canister_info(args)));
         case (null) {};
       };
       sync_queue := Deque.pushBack(sync_queue, index);
