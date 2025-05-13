@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { Principal } from "@dfinity/principal";
-import { Box, Button, LinearProgress, Typography } from "@mui/joy";
+import { Box, Button, LinearProgress, Typography, useTheme } from "@mui/joy";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
 import { useGetCanisterMetadata } from "@fe/integration";
 import DashboardPageLayout from "@fe/components/dashboard-page-layout";
@@ -15,6 +16,10 @@ interface MetadataProps {
 }
 
 const Metadata = ({ callerIsController }: MetadataProps) => {
+  const theme = useTheme();
+
+  const down650 = useMediaQuery(theme.breakpoints.down(650));
+
   const { canisterId } = useParams();
 
   const [modalIsOpen, setModalIsOpen] = useState(false);
@@ -28,30 +33,55 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
   const [metadataSourcesModalOpen, setMetadataSourcesModalOpen] =
     useState(false);
 
+  const buttons = (
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 1,
+
+        ...(down650 && {
+          marginBottom: 1,
+        }),
+      }}
+    >
+      <Button
+        sx={{
+          ...(down650 && {
+            flex: 1,
+            whiteSpace: "nowrap",
+          }),
+        }}
+        onClick={() => setMetadataSourcesModalOpen(true)}
+        variant="outlined"
+        size="sm"
+        color="neutral"
+      >
+        Metadata sources
+      </Button>
+      {callerIsController ? (
+        <Button
+          sx={{
+            ...(down650 && {
+              flex: 1,
+              whiteSpace: "nowrap",
+            }),
+          }}
+          onClick={openModal}
+          variant="outlined"
+          size="sm"
+          color="neutral"
+        >
+          Update metadata
+        </Button>
+      ) : undefined}
+    </Box>
+  );
+
   return (
     <DashboardPageLayout
       title="Metadata"
-      rightPart={
-        <Box sx={{ display: "flex", gap: 1 }}>
-          <Button
-            size="sm"
-            color="neutral"
-            onClick={() => setMetadataSourcesModalOpen(true)}
-          >
-            Metadata sources
-          </Button>
-          {!callerIsController ? (
-            <Button
-              onClick={openModal}
-              variant="outlined"
-              size="sm"
-              color="neutral"
-            >
-              Update metadata
-            </Button>
-          ) : undefined}
-        </Box>
-      }
+      rightPart={!down650 ? buttons : null}
       onRefetch={() => {
         refetch();
       }}
@@ -72,6 +102,7 @@ const Metadata = ({ callerIsController }: MetadataProps) => {
                 )
               : "Not updated"}
           </Typography>
+          {down650 && buttons}
           <Box sx={{ marginBottom: 1 }}>
             <Box sx={{ display: "inline", fontWeight: 600 }}>Name:</Box>{" "}
             <Box sx={{ display: "inline" }}>{data.name}</Box>

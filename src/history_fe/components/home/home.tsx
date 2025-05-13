@@ -9,9 +9,11 @@ import {
   FormLabel,
   Input,
   Typography,
+  useTheme,
 } from "@mui/joy";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import AddIcon from "@mui/icons-material/Add";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
 import ConnectButton from "@fe/components/connect-button";
 import ThemeButton from "@fe/components/theme-button";
@@ -24,6 +26,10 @@ import TrackModal from "./track-modal";
 import icpLogo from "./icp-logo.svg";
 
 const Home = () => {
+  const theme = useTheme();
+
+  const downMd = useMediaQuery(theme.breakpoints.down("md"));
+
   const navigate = useNavigate();
 
   const [canisterId, setCanisterId] = useState("");
@@ -64,48 +70,61 @@ const Home = () => {
   return (
     <Box
       sx={{
+        display: "flex",
+        flexDirection: "column",
         width: "100%",
         maxWidth: "990px",
-        p: 4,
+        p: 2,
         mx: "auto",
       }}
     >
       <Box
         sx={{
           display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end",
-          gap: 0.5,
-          marginBottom: 1,
+          alignItems: "center",
+          gap: 2,
+          marginBottom: 5,
         }}
       >
-        <InfoItem label="Your principal" content={userPrincipal} withCopy />
+        <img style={{ height: "24px" }} src={icpLogo} alt="ICP logo" />
+        <Typography level="h2" component="h1">HistoryTracker</Typography>
+      </Box>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: 0.5,
+          marginBottom: 2,
+        }}
+      >
+        <InfoItem
+          label="Your principal"
+          content={userPrincipal}
+          withCopy
+          copyAlwaysLeft
+        />
         <InfoItem
           label="Backend canister ID"
           content={BACKEND_CANISTER_ID}
           withCopy
+          copyAlwaysLeft
         />
       </Box>
       <Box
-        sx={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 5 }}
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          gap: 1,
+          marginBottom: 5,
+        }}
       >
-        <img style={{ height: "24px" }} src={icpLogo} alt="ICP logo" />
-        <Typography level="h1">ICP History Tracker</Typography>
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            marginLeft: "auto",
-          }}
-        >
-          <ConnectButton />
-          <ThemeButton />
-        </Box>
+        <ConnectButton />
+        <ThemeButton />
       </Box>
       <Box sx={{ marginBottom: 5 }}>
         <FormControl
-          sx={{ width: "320px", marginBottom: 2 }}
+          sx={{ maxWidth: "320px", marginBottom: 2 }}
           error={validationError}
         >
           <FormLabel>Canister ID:</FormLabel>
@@ -146,9 +165,7 @@ const Home = () => {
       </Box>
       <Box sx={{ marginBottom: 5 }}>
         <Typography sx={{ marginBottom: 2 }}>
-          Manage and reuse metadata for your Wasm modules
-          <br />
-          via Metadata directory.
+          Manage and reuse metadata for your Wasm modules via Metadata directory.
         </Typography>
         <Button color="primary" component={Link} to="/metadata-directory">
           Go to Metadata directory

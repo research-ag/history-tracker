@@ -1,23 +1,41 @@
 import { format } from "date-fns";
-import { Box, Divider, Typography } from "@mui/joy";
+import { Box, Divider, Typography, useTheme } from "@mui/joy";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
 import { CanisterChangesResponse } from "@declarations/history_be/history_be.did";
+import { SxProps } from "@mui/joy/styles/types";
 
 interface HistoryInfoLineProps {
+  sx?: SxProps;
   data: CanisterChangesResponse;
 }
 
-const HistoryInfoLine = ({ data }: HistoryInfoLineProps) => {
+const HistoryInfoLine = ({ sx, data }: HistoryInfoLineProps) => {
+  const theme = useTheme();
+
+  const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+    <Box
+      sx={{
+        display: "flex",
+        alignItems: "center",
+        columnGap: 2,
+        ...(downSm && {
+          flexDirection: "column",
+          alignItems: "start",
+        }),
+        ...sx,
+      }}
+    >
       <Typography level="body-xs">
         Total records: {Number(data.total_num_changes)}
       </Typography>
-      <Divider orientation="vertical" />
+      {!downSm && <Divider orientation="vertical" />}
       <Typography level="body-xs">
         Tracked records: {data.changes.length}
       </Typography>
-      <Divider orientation="vertical" />
+      {!downSm && <Divider orientation="vertical" />}
       <Typography level="body-xs">
         History completeness:{" "}
         {data.total_num_changes > 0
@@ -27,7 +45,7 @@ const HistoryInfoLine = ({ data }: HistoryInfoLineProps) => {
             ).toFixed(2)}%`
           : "N/A"}
       </Typography>
-      <Divider orientation="vertical" />
+      {!downSm && <Divider orientation="vertical" />}
       <Typography level="body-xs">
         Latest sync:{" "}
         {format(
