@@ -94,8 +94,8 @@ module {
 
     /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
     /// If there is an ongoing sync, then new one is not starting.
-    public func sync() : async* Bool {
-      if (sync_ongoing) return false;
+    public func sync() : async* ?Nat {
+      if (sync_ongoing) return null;
 
       sync_ongoing := true;
 
@@ -130,7 +130,7 @@ module {
 
       sync_ongoing := false;
 
-      true;
+      ?changes_size;
     };
 
     public func canister_changes() : CanisterChangesResponse {
@@ -172,9 +172,9 @@ module {
       Array.find<Principal>(info.controllers, func c = c == p) != null;
     };
 
-    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* () {
+    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* Bool {
       let is_controller = await* check_controller(caller);
-      if (not is_controller) throw Error.reject("Access denied.");
+      if (not is_controller) return false;
 
       switch (name) {
         case null {};
@@ -191,6 +191,7 @@ module {
       };
 
       internal_state.metadata.latest_update_timestamp := Prim.time();
+      true;
     };
 
     public func share() : StableData {
