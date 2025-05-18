@@ -8,7 +8,7 @@ import Array "mo:base/Array";
 import Bool "mo:base/Bool";
 import Prim "mo:prim";
 
-import IC "ic"
+import IC "ic";
 
 module {
   type ExtendedChange = IC.CanisterChange and {
@@ -71,6 +71,7 @@ module {
     history;
   };
 
+  let ic = actor "aaaaa-aa" : IC.Management;
   public class CanisterHistory(canister_id : Principal) {
 
     let internal_state : InternalState = {
@@ -88,36 +89,30 @@ module {
       };
     };
 
-    public let ic = actor "aaaaa-aa" : IC.Management;
-
-    var sync_ongoing = false;
+    public var sync_ongoing = false;
 
     /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
     /// If there is an ongoing sync, then new one is not starting.
     public func sync() : async* Bool {
-      let ?args = schedule_sync_call() else return false;
+      if (sync_ongoing) return false;
       try {
-        let info = await ic.canister_info(args);
-        handle_sync_response(?info);
-      } catch (_) {
-        handle_sync_response(null);
+        let info = await ic.canister_info({
+          canister_id;
+          num_requested_changes = ?20;
+        });
+        sync_call_process_response(info);
+      } catch (_) {} finally {
+        sync_ongoing := false;
       };
-      true;
+      return true;
     };
 
-    public func schedule_sync_call() : ?IC.CanisterInfoRequest {
-      if (sync_ongoing) return null;
-      sync_ongoing := true;
-      ?{
-        canister_id;
-        num_requested_changes = ?20;
-      };
+    public func sync_call_arg() : IC.CanisterInfoRequest = {
+      canister_id;
+      num_requested_changes = ?Nat64.fromNat(20);
     };
 
-    public func handle_sync_response(response : ?IC.CanisterInfoResponse) {
-      sync_ongoing := false;
-      let ?info = response else return;
-
+    public func sync_call_process_response(info : IC.CanisterInfoResponse) {
       let changes_size = info.recent_changes.size();
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
 
