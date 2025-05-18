@@ -8,9 +8,10 @@ import Timer "mo:base/Timer";
 import Result "mo:base/Result";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
+import Buffer "mo:base/Buffer";
 
 import CanisterHistory "CanisterHistory";
-import IC "ic"
+import Concurrent "info/concurrent_calls";
 
 actor class HistoryTracker() = self {
 
@@ -107,10 +108,13 @@ actor class HistoryTracker() = self {
     };
   };
 
+  transient var open_calls = 0; // must be 0 when canister was stopped
+  transient var trapDetected = false;
+
   func trigger_sync() : async* () {
     var ctr = 0;
     let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
-    let calls : Vec.Vector<(CanisterHistory.CanisterHistory, async IC.CanisterInfoResponse)> = Vec.new();
+    let calls = Buffer.Buffer<Concurrent.Item>(sync_num);
 
     while (ctr < sync_num) {
       let (index, queue_after_pop) = switch (Deque.popFront(sync_queue)) {
@@ -119,23 +123,33 @@ actor class HistoryTracker() = self {
       };
       sync_queue := queue_after_pop;
       let history = history_storage.get(index);
-      switch (history.schedule_sync_call()) {
-        case (?args) Vec.add(calls, (history, history.ic.canister_info(args)));
-        case (null) {};
+      if (not history.sync_ongoing) {
+        let item : Concurrent.Item = {
+          call_arg = history.sync_call_arg();
+          register_call = func() {
+            history.sync_ongoing := true;
+            open_calls += 1;
+          };
+          process_response = func(info) {
+            history.sync_call_process_response(info);
+            history.sync_ongoing := false;
+            open_calls -= 1;
+          };
+          process_error = func(_) {
+            history.sync_ongoing := false;
+            open_calls -= 1;
+          };
+        };
+        calls.add(item);
       };
       sync_queue := Deque.pushBack(sync_queue, index);
       ctr += 1;
     };
 
-    for ((history, call) in Vec.vals(calls)) {
-      try {
-        let info = await call;
-        history.handle_sync_response(?info);
-      } catch (_) {
-        history.handle_sync_response(null);
-      };
-    };
-
+    await* Concurrent.make_calls(
+      Buffer.toArray(calls),
+      func(i) { trapDetected := true },  // trap_cb
+    );
   };
 
   ignore Timer.recurringTimer<system>(
