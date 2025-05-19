@@ -85,6 +85,10 @@ actor class HistoryTracker() = self {
 
   stable var stable_data : StableData = (pt.share(), convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
 
+  public query func tracked_canisters_total() : async Nat {
+    history_storage.size();
+  };
+
   public query func is_canister_tracked(canister_id : Principal) : async Bool {
     history_storage_map.get(canister_id) != null;
   };
