@@ -109,14 +109,17 @@ actor class HistoryTracker() = self {
   };
 
   transient var open_calls = 0; // must be 0 when canister was stopped
-  transient var trapDetected = false;
+  transient var trapsDetected = 0;
 
   func trigger_sync() : async* () {
-    var ctr = 0;
     let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
-    let calls = Buffer.Buffer<Concurrent.Item>(sync_num);
+    if (open_calls >= sync_num) return;
 
-    while (ctr < sync_num) {
+    let new_calls : Nat = sync_num - open_calls;
+    let calls = Buffer.Buffer<Concurrent.Item>(new_calls);
+
+    var ctr = 0;
+    while (ctr < new_calls) {
       let (index, queue_after_pop) = switch (Deque.popFront(sync_queue)) {
         case (?v) v;
         case (null) Debug.trap("Internal error.");
@@ -148,7 +151,7 @@ actor class HistoryTracker() = self {
 
     await* Concurrent.make_calls(
       Buffer.toArray(calls),
-      func(i) { trapDetected := true },  // trap_cb
+      func(i) { trapsDetected += 1 }, // trap_cb
     );
   };
 

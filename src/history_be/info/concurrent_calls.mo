@@ -4,8 +4,6 @@ import Error "mo:base/Error";
 import Call "single_call";
 
 module {
-  //public type ProcFunc = Result.Result<Call.Response, Error.Error> -> ();
-
   public type Item = {
     call_arg : Call.Arg;
     process_response : Call.Response -> ();
