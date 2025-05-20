@@ -76,7 +76,7 @@ actor class HistoryTracker() = self {
   let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
   let syncSuccess = pt.addCounter("sync_success_total", "", true);
   let syncFailure = pt.addCounter("sync_failure_total", "", true);
-  let syncDuration = pt.addGauge("canister_sync_duration_seconds", "", #both, [], true);
+  let syncDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
   let changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
@@ -175,7 +175,7 @@ actor class HistoryTracker() = self {
             let duration : ?Nat = Nat.fromText(Int.toText(end_time - start_time));
 
             switch (duration) {
-              case (?x) { syncDuration.update((x) / 1_000_000_000) };
+              case (?x) { syncDuration.update((x) / 1_000_000) };
               case null {};
             };
 
