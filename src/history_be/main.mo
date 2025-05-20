@@ -1,9 +1,7 @@
 import Principal "mo:base/Principal";
 import RBTree "mo:base/RBTree";
 import Iter "mo:base/Iter";
-import Deque "mo:base/Deque";
 import Nat "mo:base/Nat";
-import Debug "mo:base/Debug";
 import Timer "mo:base/Timer";
 import Result "mo:base/Result";
 import Vector "mo:vector/Class";
@@ -31,7 +29,6 @@ actor class HistoryTracker() = self {
   type StableData = (
     [CanisterHistory.StableData], // history_storage
     RBTree.Tree<Principal, Nat>, // history_storage_map
-    Deque.Deque<Nat>, // sync_queue
   );
 
   /// Converts the history storage to stable type.
@@ -47,10 +44,7 @@ actor class HistoryTracker() = self {
   /// Maps the canister id to the history instance index in the storage.
   let history_storage_map = RBTree.RBTree<Principal, Nat>(Principal.compare);
 
-  /// Contains indexes of the canister histories in the order in which they will sync.
-  var sync_queue = Deque.empty<Nat>();
-
-  stable var stable_data : StableData = (convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
+  stable var stable_data : StableData = (convert_hs_to_stable(history_storage), history_storage_map.share());
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool {
     history_storage_map.get(canister_id) != null;
@@ -63,7 +57,6 @@ actor class HistoryTracker() = self {
     history_storage.add(new_canister_history);
     let last_index : Nat = history_storage.size() - 1;
     history_storage_map.put(canister_id, last_index);
-    sync_queue := Deque.pushBack(sync_queue, last_index);
     #ok();
   };
 
@@ -111,8 +104,11 @@ actor class HistoryTracker() = self {
   transient var open_calls = 0; // must be 0 when canister was stopped
   transient var trapsDetected = 0;
 
+  var sync_pos = 0;
+
   func trigger_sync() : async* () {
-    let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
+    let N = history_storage.size();
+    let sync_num = Nat.min(canisters_num_to_sync, N);
     if (open_calls >= sync_num) return;
 
     let new_calls : Nat = sync_num - open_calls;
@@ -120,12 +116,7 @@ actor class HistoryTracker() = self {
 
     var ctr = 0;
     while (ctr < new_calls) {
-      let (index, queue_after_pop) = switch (Deque.popFront(sync_queue)) {
-        case (?v) v;
-        case (null) Debug.trap("Internal error.");
-      };
-      sync_queue := queue_after_pop;
-      let history = history_storage.get(index);
+      let history = history_storage.get(sync_pos);
       if (not history.sync_ongoing) {
         let item : Concurrent.Item = {
           call_arg = history.sync_call_arg();
@@ -145,8 +136,9 @@ actor class HistoryTracker() = self {
         };
         calls.add(item);
       };
-      sync_queue := Deque.pushBack(sync_queue, index);
       ctr += 1;
+      sync_pos += 1;
+      if (sync_pos >= N) sync_pos -= N;
     };
 
     await* Concurrent.make_calls(
@@ -161,7 +153,7 @@ actor class HistoryTracker() = self {
   );
 
   system func preupgrade() {
-    stable_data := (convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
+    stable_data := (convert_hs_to_stable(history_storage), history_storage_map.share());
   };
 
   system func postupgrade() {
@@ -176,6 +168,5 @@ actor class HistoryTracker() = self {
     );
 
     history_storage_map.unshare(stable_data.1);
-    sync_queue := stable_data.2;
   };
 };
