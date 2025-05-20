@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
-import { Sheet, Box, Typography, Button } from "@mui/joy";
+import { Sheet, Box, Typography, Button, useTheme } from "@mui/joy";
 import HomeIcon from "@mui/icons-material/Home";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
 import InfoItem from "@fe/components/info-item";
 import { METADATA_DIRECTORY_BACKEND_CANISTER_ID } from "@fe/integration";
@@ -11,6 +12,10 @@ import ThemeButton from "@fe/components/theme-button";
 import WasmMetadata from "./wasm-metadata";
 
 const MetadataDirectory = () => {
+  const theme = useTheme();
+
+  const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+
   const { identity } = useIdentity();
 
   const userPrincipal = identity.getPrincipal().toText();
@@ -30,7 +35,6 @@ const MetadataDirectory = () => {
         sx={{
           display: "flex",
           flexDirection: "column",
-          alignItems: "flex-end",
           marginBottom: 2,
         }}
       >
@@ -41,6 +45,11 @@ const MetadataDirectory = () => {
             alignItems: "flex-end",
             gap: 0.5,
             marginBottom: 1,
+
+            [theme.breakpoints.down("sm")]: {
+              alignItems: "flex-start",
+              marginBottom: 2,
+            },
           }}
         >
           <InfoItem label="Your principal" content={userPrincipal} withCopy />
@@ -50,10 +59,29 @@ const MetadataDirectory = () => {
             withCopy
           />
         </Box>
-        <Box sx={{ display: "flex", alignItems: "center" }}>
-          <Link to="/">
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "end",
+            gap: 1,
+            flexWrap: "wrap",
+
+            [theme.breakpoints.down("sm")]: {
+              flex: "1",
+              justifyContent: "start",
+            },
+          }}
+        >
+          <Link style={{ display: "contents" }} to="/">
             <Button
-              sx={{ marginLeft: 1 }}
+              sx={{
+                marginLeft: 1,
+
+                [theme.breakpoints.down("sm")]: {
+                  flex: "1",
+                },
+              }}
               variant="solid"
               color="primary"
               startDecorator={<HomeIcon />}
@@ -61,8 +89,20 @@ const MetadataDirectory = () => {
               Home
             </Button>
           </Link>
-          <ConnectButton sx={{ marginLeft: 1 }} />
-          <ThemeButton sx={{ marginLeft: 1 }} />
+          <ConnectButton
+            sx={{
+              marginLeft: 1,
+
+              [theme.breakpoints.down("sm")]: {
+                flex: "1",
+              },
+            }}
+          />
+          <ThemeButton
+            sx={{
+              marginLeft: 1,
+            }}
+          />
         </Box>
       </Box>
       <Sheet
@@ -76,7 +116,7 @@ const MetadataDirectory = () => {
         variant="outlined"
         color="neutral"
       >
-        <Typography sx={{ mb: 2 }} level="h1">
+        <Typography sx={{ mb: 2 }} level={!downSm ? "h1" : "h3"} component="h1">
           Metadata directory
         </Typography>
         {isAnonymous ? (

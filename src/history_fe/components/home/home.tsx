@@ -74,7 +74,8 @@ const Home = () => {
         flexDirection: "column",
         width: "100%",
         maxWidth: "990px",
-        p: 2,
+        py: 5,
+        px: 2,
         mx: "auto",
       }}
     >
@@ -87,7 +88,9 @@ const Home = () => {
         }}
       >
         <img style={{ height: "24px" }} src={icpLogo} alt="ICP logo" />
-        <Typography level="h2" component="h1">HistoryTracker</Typography>
+        <Typography level="h2" component="h1">
+          HistoryTracker
+        </Typography>
       </Box>
       <Box
         sx={{
@@ -165,7 +168,8 @@ const Home = () => {
       </Box>
       <Box sx={{ marginBottom: 5 }}>
         <Typography sx={{ marginBottom: 2 }}>
-          Manage and reuse metadata for your Wasm modules via Metadata directory.
+          Manage and reuse metadata for your Wasm modules via Metadata
+          directory.
         </Typography>
         <Button color="primary" component={Link} to="/metadata-directory">
           Go to Metadata directory
