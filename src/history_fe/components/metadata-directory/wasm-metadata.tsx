@@ -262,7 +262,13 @@ const WasmMetadata_ = () => {
                     </tr>
                     <tr>
                       <td>Description</td>
-                      <td>
+                      <td
+                        style={{
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {record.description ? (
                           record.description
                         ) : (
@@ -272,7 +278,13 @@ const WasmMetadata_ = () => {
                     </tr>
                     <tr>
                       <td>Build instructions</td>
-                      <td>
+                      <td
+                        style={{
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {record.build_instructions ? (
                           record.build_instructions
                         ) : (
