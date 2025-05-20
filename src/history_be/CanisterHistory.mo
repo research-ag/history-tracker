@@ -8,7 +8,7 @@ import Array "mo:base/Array";
 import Bool "mo:base/Bool";
 import Prim "mo:prim";
 
-import IC "ic"
+import IC "ic";
 
 module {
   type ExtendedChange = IC.CanisterChange and {
@@ -71,6 +71,7 @@ module {
     history;
   };
 
+  let ic = actor "aaaaa-aa" : IC.Management;
   public class CanisterHistory(canister_id : Principal) {
 
     let internal_state : InternalState = {
@@ -88,22 +89,28 @@ module {
       };
     };
 
-    let ic = actor "aaaaa-aa" : IC.Management;
+    public var sync_ongoing = false;
 
-    var sync_ongoing = false;
+    public func sync() : async* Bool {
+      if (sync_ongoing) return false;
+      try {
+        let info = await ic.canister_info({
+          canister_id;
+          num_requested_changes = ?20;
+        });
+        sync_call_process_response(info);
+      } catch (_) {} finally {
+        sync_ongoing := false;
+      };
+      true;
+    };
 
-    /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
-    /// If there is an ongoing sync, then new one is not starting.
-    public func sync() : async* ?Nat {
-      if (sync_ongoing) return null;
+    public func sync_call_arg() : IC.CanisterInfoRequest = {
+      canister_id;
+      num_requested_changes = ?Nat64.fromNat(20);
+    };
 
-      sync_ongoing := true;
-
-      let info = await ic.canister_info({
-        canister_id;
-        num_requested_changes = ?Nat64.fromNat(20);
-      });
-
+    public func sync_call_process_response(info : IC.CanisterInfoResponse) {
       let changes_size = info.recent_changes.size();
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
 
@@ -127,10 +134,6 @@ module {
       internal_state.controllers := info.controllers;
       internal_state.timestamp_nanos := Prim.time();
       internal_state.sync_version += 1;
-
-      sync_ongoing := false;
-
-      ?changes_size;
     };
 
     public func canister_changes() : CanisterChangesResponse {

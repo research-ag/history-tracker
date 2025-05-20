@@ -1,9 +1,7 @@
 import Principal "mo:base/Principal";
 import RBTree "mo:base/RBTree";
 import Iter "mo:base/Iter";
-import Deque "mo:base/Deque";
 import Nat "mo:base/Nat";
-import Debug "mo:base/Debug";
 import Timer "mo:base/Timer";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -13,9 +11,12 @@ import Error "mo:base/Error";
 import Vector "mo:vector/Class";
 import Vec "mo:vector";
 import PT "mo:promtracker";
+import Buffer "mo:base/Buffer";
+import Debug "mo:base/Debug";
 
 import Http "tiny_http";
 import CanisterHistory "CanisterHistory";
+import Concurrent "info/concurrent_calls";
 
 actor class HistoryTracker() = self {
 
@@ -39,7 +40,6 @@ actor class HistoryTracker() = self {
     PT.StableData, // pt
     [CanisterHistory.StableData], // history_storage
     RBTree.Tree<Principal, Nat>, // history_storage_map
-    Deque.Deque<Nat>, // sync_queue
   );
 
   /// Converts the history storage to stable type.
@@ -54,9 +54,6 @@ actor class HistoryTracker() = self {
 
   /// Maps the canister id to the history instance index in the storage.
   let history_storage_map = RBTree.RBTree<Principal, Nat>(Principal.compare);
-
-  /// Contains indexes of the canister histories in the order in which they will sync.
-  var sync_queue = Deque.empty<Nat>();
 
   let start_time = Time.now();
 
@@ -83,7 +80,7 @@ actor class HistoryTracker() = self {
   let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
   ignore pt.addPullValue("uptime_seconds", "", uptime);
 
-  stable var stable_data : StableData = (pt.share(), convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
+  stable var stable_data : StableData = (pt.share(), convert_hs_to_stable(history_storage), history_storage_map.share());
 
   public query func tracked_canisters_total() : async Nat {
     history_storage.size();
@@ -100,7 +97,6 @@ actor class HistoryTracker() = self {
     history_storage.add(new_canister_history);
     let last_index : Nat = history_storage.size() - 1;
     history_storage_map.put(canister_id, last_index);
-    sync_queue := Deque.pushBack(sync_queue, last_index);
     #ok();
   };
 
@@ -154,22 +150,35 @@ actor class HistoryTracker() = self {
     };
   };
 
+  transient var open_calls = 0; // must be 0 when canister was stopped
+  transient var trapsDetected = 0;
+
+  var sync_pos = 0;
+
   func trigger_sync() : async* () {
+    let N = history_storage.size();
+    let sync_num = Nat.min(canisters_num_to_sync, N);
+    if (open_calls >= sync_num) return;
+
+    let new_calls : Nat = sync_num - open_calls;
+    let calls = Buffer.Buffer<Concurrent.Item>(new_calls);
+
     var ctr = 0;
-    let sync_num = Nat.min(canisters_num_to_sync, history_storage.size());
-    while (ctr < sync_num) {
-      let (index, queue_after_pop) = switch (Deque.popFront(sync_queue)) {
-        case (?v) v;
-        case (null) Debug.trap("Internal error.");
-      };
-      sync_queue := queue_after_pop;
-      let history = history_storage.get(index);
-      try {
-        ignore async {
-          let start_time = Time.now();
-          syncAttempts.add(1);
-          try {
-            let result = await* history.sync();
+    while (ctr < new_calls) {
+      let history = history_storage.get(sync_pos);
+      if (not history.sync_ongoing) {
+        var start_time = Time.now();
+        let item : Concurrent.Item = {
+          call_arg = history.sync_call_arg();
+          register_call = func() {
+            start_time := Time.now();
+            syncAttempts.add(1);
+            history.sync_ongoing := true;
+            open_calls += 1;
+          };
+          process_response = func(info) {
+            syncSuccess.add(1);
+            changesPerSync.update(info.recent_changes.size());
 
             let end_time = Time.now();
             let duration : ?Nat = Nat.fromText(Int.toText(end_time - start_time));
@@ -179,21 +188,27 @@ actor class HistoryTracker() = self {
               case null {};
             };
 
-            switch (result) {
-              case (?changes_size) {
-                syncSuccess.add(1);
-                changesPerSync.update(changes_size);
-              };
-              case null { syncFailure.add(1) };
-            };
-          } catch (_) {
+            history.sync_call_process_response(info);
+            history.sync_ongoing := false;
+            open_calls -= 1;
+          };
+          process_error = func(_) {
             syncFailure.add(1);
+            history.sync_ongoing := false;
+            open_calls -= 1;
           };
         };
-      } catch (_) {};
-      sync_queue := Deque.pushBack(sync_queue, index);
+        calls.add(item);
+      };
       ctr += 1;
+      sync_pos += 1;
+      if (sync_pos >= N) sync_pos -= N;
     };
+
+    await* Concurrent.make_calls(
+      Buffer.toArray(calls),
+      func(i) { syncFailure.add(1); trapsDetected += 1 }, // trap_cb
+    );
   };
 
   ignore Timer.recurringTimer<system>(
@@ -202,7 +217,7 @@ actor class HistoryTracker() = self {
   );
 
   system func preupgrade() {
-    stable_data := (pt.share(), convert_hs_to_stable(history_storage), history_storage_map.share(), sync_queue);
+    stable_data := (pt.share(), convert_hs_to_stable(history_storage), history_storage_map.share());
   };
 
   system func postupgrade() {
@@ -219,7 +234,6 @@ actor class HistoryTracker() = self {
     );
 
     history_storage_map.unshare(stable_data.2);
-    sync_queue := stable_data.3;
   };
 
   public query func http_request(req : Http.Request) : async Http.Response {
