@@ -21,7 +21,7 @@ module {
     latest_update_timestamp : Nat64;
   };
 
-  public type InternalState = {
+  public type History = {
     changes : Vector.Vector<ExtendedChange>; // all tracked changes
     var latest_change_timestamp : Nat64; // latest tracked change timestamp
     var total_num_changes : Nat64; // total number of changes
@@ -35,6 +35,7 @@ module {
       var latest_update_timestamp : Nat64;
     };
     canister_id : Principal;
+    var sync_ongoing : Bool;
   };
 
   public type CanisterChangesResponse = {
@@ -51,51 +52,44 @@ module {
     sync_version : Nat;
   };
 
-  public func fromStableData(data : InternalState) : CanisterHistory {
-    let history = CanisterHistory(data.canister_id);
-    history.unshare(data);
-    history;
+  public func new(canister_id : Principal) : History = {
+    changes = Vector.new<ExtendedChange>();
+    var latest_change_timestamp = 0;
+    var total_num_changes = 0;
+    var module_hash = null;
+    var controllers = [];
+    var timestamp_nanos = 0;
+    var sync_version = 0;
+    var metadata = {
+      var name = "";
+      var description = "";
+      var latest_update_timestamp = 0;
+    };
+    canister_id;
+    var sync_ongoing = false;
   };
 
   let ic = actor "aaaaa-aa" : IC.Management;
-  public class CanisterHistory(canister_id : Principal) {
-
-    var internal_state : InternalState = {
-      changes = Vector.new<ExtendedChange>();
-      var latest_change_timestamp = 0;
-      var total_num_changes = 0;
-      var module_hash = null;
-      var controllers = [];
-      var timestamp_nanos = 0;
-      var sync_version = 0;
-      var metadata = {
-        var name = "";
-        var description = "";
-        var latest_update_timestamp = 0;
-      };
-      canister_id;
-    };
-
-    public var sync_ongoing = false;
+  public class API(state : History) {
 
     /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
     /// If there is an ongoing sync, then new one is not starting.
     public func sync() : async* Bool {
-      if (sync_ongoing) return false;
+      if (state.sync_ongoing) return false;
       try {
         let info = await ic.canister_info({
-          canister_id;
+          canister_id = state.canister_id;
           num_requested_changes = ?20;
         });
         sync_call_process_response(info);
       } catch (_) {} finally {
-        sync_ongoing := false;
+        state.sync_ongoing := false;
       };
       return true;
     };
 
     public func sync_call_arg() : IC.CanisterInfoRequest = {
-      canister_id;
+      canister_id = state.canister_id;
       num_requested_changes = ?Nat64.fromNat(20);
     };
 
@@ -105,52 +99,52 @@ module {
 
       // Merge untracked changes with already saved ones
       for (change in Iter.fromArray(info.recent_changes)) {
-        if (change.timestamp_nanos > internal_state.latest_change_timestamp) {
+        if (change.timestamp_nanos > state.latest_change_timestamp) {
           Vector.add(
-            internal_state.changes,
+            state.changes,
             {
               change with
               change_index = cur_change_index;
             },
           );
-          internal_state.latest_change_timestamp := change.timestamp_nanos;
+          state.latest_change_timestamp := change.timestamp_nanos;
         };
         cur_change_index += 1;
       };
 
-      internal_state.total_num_changes := info.total_num_changes;
-      internal_state.module_hash := info.module_hash;
-      internal_state.controllers := info.controllers;
-      internal_state.timestamp_nanos := Prim.time();
-      internal_state.sync_version += 1;
+      state.total_num_changes := info.total_num_changes;
+      state.module_hash := info.module_hash;
+      state.controllers := info.controllers;
+      state.timestamp_nanos := Prim.time();
+      state.sync_version += 1;
     };
 
     public func canister_changes() : CanisterChangesResponse = {
-      changes = Vector.toArray(internal_state.changes);
-      total_num_changes = internal_state.total_num_changes;
-      timestamp_nanos = internal_state.timestamp_nanos;
-      sync_version = internal_state.sync_version;
+      changes = Vector.toArray(state.changes);
+      total_num_changes = state.total_num_changes;
+      timestamp_nanos = state.timestamp_nanos;
+      sync_version = state.sync_version;
     };
 
     public func canister_state() : CanisterStateResponse = {
-      module_hash = internal_state.module_hash;
-      controllers = internal_state.controllers;
-      timestamp_nanos = internal_state.timestamp_nanos;
-      sync_version = internal_state.sync_version;
+      module_hash = state.module_hash;
+      controllers = state.controllers;
+      timestamp_nanos = state.timestamp_nanos;
+      sync_version = state.sync_version;
     };
 
     public func metadata() : Metadata {
       {
-        name = internal_state.metadata.name;
-        description = internal_state.metadata.description;
-        latest_update_timestamp = internal_state.metadata.latest_update_timestamp;
+        name = state.metadata.name;
+        description = state.metadata.description;
+        latest_update_timestamp = state.metadata.latest_update_timestamp;
       };
     };
 
     public func check_controller(p : Principal) : async* Bool {
       let info = try {
         await ic.canister_info({
-          canister_id;
+          canister_id = state.canister_id;
           num_requested_changes = ?Nat64.fromNat(0);
         });
       } catch (_) throw Error.reject("canister_info error.");
@@ -164,24 +158,18 @@ module {
       switch (name) {
         case null {};
         case (?value) {
-          internal_state.metadata.name := value;
+          state.metadata.name := value;
         };
       };
 
       switch (description) {
         case null {};
         case (?value) {
-          internal_state.metadata.description := value;
+          state.metadata.description := value;
         };
       };
 
-      internal_state.metadata.latest_update_timestamp := Prim.time();
-    };
-
-    public func share() : InternalState = internal_state;
-
-    public func unshare(data : InternalState) {
-      internal_state := data;
+      state.metadata.latest_update_timestamp := Prim.time();
     };
   };
 };
