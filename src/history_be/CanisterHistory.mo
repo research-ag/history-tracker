@@ -1,6 +1,5 @@
-import Array "mo:base/Array";
-import Error "mo:base/Error";
 import Nat64 "mo:base/Nat64";
+import Principal "mo:base/Principal";
 import List "mo:new-base/List";
 import Prim "mo:prim";
 
@@ -135,19 +134,8 @@ module {
       };
     };
 
-    public func check_controller(p : Principal) : async* Bool {
-      let info = try {
-        await ic.canister_info({
-          canister_id = state.canister_id;
-          num_requested_changes = ?Nat64.fromNat(0);
-        });
-      } catch (_) throw Error.reject("canister_info error.");
-      Array.find<Principal>(info.controllers, func c = c == p) != null;
-    };
-
     public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* Bool {
-      let is_controller = await* check_controller(caller);
-      if (not is_controller) return false;
+      if (not Principal.isController(caller)) return false;
 
       switch (name) {
         case null {};
