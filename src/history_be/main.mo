@@ -7,6 +7,14 @@ import Result "mo:base/Result";
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
 
+import Debug "mo:base/Debug";
+import Text "mo:base/Text";
+import Time "mo:base/Time";
+import Int "mo:base/Int";
+import Error "mo:base/Error";
+import PT "mo:promtracker";
+
+import Http "tiny_http";
 import CanisterHistory "CanisterHistory";
 import Concurrent "info/concurrent_calls";
 
@@ -22,8 +30,13 @@ actor class HistoryTracker() = self {
     };
   };
 
+  let pt = PT.PromTracker("", 65);
+  pt.addSystemValues();
+
   /// Number of canisters that are synchronized per iteration.
   let canisters_num_to_sync = 5;
+
+  type StableData = PT.StableData;
 
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
@@ -46,6 +59,37 @@ actor class HistoryTracker() = self {
     let res = Map.insert<Principal, Nat>(history_storage_map, Principal.compare, canister_id, index);
     history_storage_map := res.0;
     res.1;
+  };
+
+  let start_time = Time.now();
+
+  func uptime() : Nat {
+    let end_time = Time.now();
+    let duration : ?Nat = Nat.fromText(Int.toText(end_time - start_time));
+
+    switch (duration) {
+      case (?x) { x / 1_000_000_000 };
+      case null {
+        Debug.trap("Internal error");
+      };
+    };
+  };
+
+  ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
+  let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
+  let syncSuccess = pt.addCounter("sync_success_total", "", true);
+  let syncFailure = pt.addCounter("sync_failure_total", "", true);
+  let syncDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
+  let changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
+  ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
+  let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
+  let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
+  ignore pt.addPullValue("uptime_seconds", "", uptime);
+
+  stable var stable_data : StableData = pt.share();
+
+  public query func tracked_canisters_total() : async Nat {
+    List.size(history_storage);
   };
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool {
@@ -85,8 +129,17 @@ actor class HistoryTracker() = self {
 
   public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.UpdateMetadata> {
     let ?h = get_history(canister_id) else return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
-    await* CanisterHistory.API(h).update_metadata(caller, name, description);
-    #ok();
+        let result = await* CanisterHistory.API(h).update_metadata(caller, name, description);
+        switch (result) {
+          case true {
+            metadataUpdates.add(1);
+            #ok();
+          };
+          case false {
+            unauthorizedMetadataUpdates.add(1);
+            throw Error.reject("Access denied.");
+          };
+        };
   };
 
   transient var open_calls = 0; // must be 0 when canister was stopped
@@ -106,18 +159,33 @@ actor class HistoryTracker() = self {
     while (ctr < new_calls) {
       let history = List.get(history_storage, sync_pos);
       if (not history.sync_ongoing) {
+        var start_time = Time.now();
         let item : Concurrent.Item = {
           call_arg = CanisterHistory.API(history).sync_call_arg();
           register_call = func() {
+            start_time := Time.now();
+            syncAttempts.add(1);
             history.sync_ongoing := true;
             open_calls += 1;
           };
           process_response = func(info) {
             CanisterHistory.API(history).sync_call_process_response(info);
+            syncSuccess.add(1);
+            changesPerSync.update(info.recent_changes.size());
+
+            let end_time = Time.now();
+            let duration : ?Nat = Nat.fromText(Int.toText(end_time - start_time));
+
+            switch (duration) {
+              case (?x) { syncDuration.update((x) / 1_000_000) };
+              case null {};
+            };
+
             history.sync_ongoing := false;
             open_calls -= 1;
           };
           process_error = func(_) {
+            syncFailure.add(1);
             history.sync_ongoing := false;
             open_calls -= 1;
           };
@@ -131,7 +199,7 @@ actor class HistoryTracker() = self {
 
     await* Concurrent.make_calls(
       Buffer.toArray(calls),
-      func(i) { trapsDetected += 1 }, // trap_cb
+      func(i) { syncFailure.add(1); trapsDetected += 1 }, // trap_cb
     );
   };
 
@@ -140,4 +208,20 @@ actor class HistoryTracker() = self {
     func() : async () { await* trigger_sync() },
   );
 
+  system func preupgrade() {
+    stable_data := pt.share();
+  };
+
+  system func postupgrade() {
+    pt.unshare(stable_data);
+  };
+
+  public query func http_request(req : Http.Request) : async Http.Response {
+    let ?path = Text.split(req.url, #char '?').next() else return Http.render400();
+    let labels = "canister=\"" # PT.shortName(self) # "\"";
+    switch (req.method, path) {
+      case ("GET", "/metrics") Http.renderPlainText(pt.renderExposition(labels));
+      case (_) Http.render400();
+    };
+  };
 };

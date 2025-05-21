@@ -68,8 +68,6 @@ module {
   let ic = actor "aaaaa-aa" : IC.Management;
   public class API(state : History) {
 
-    /// Returns `true` if the sync is successful, and `false` if there is an ongoing sync.
-    /// If there is an ongoing sync, then new one is not starting.
     public func sync() : async* Bool {
       if (state.sync_ongoing) return false;
       try {
@@ -81,7 +79,7 @@ module {
       } catch (_) {} finally {
         state.sync_ongoing := false;
       };
-      return true;
+      true;
     };
 
     public func sync_call_arg() : IC.CanisterInfoRequest = {
@@ -147,9 +145,9 @@ module {
       Array.find<Principal>(info.controllers, func c = c == p) != null;
     };
 
-    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* () {
+    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* Bool {
       let is_controller = await* check_controller(caller);
-      if (not is_controller) throw Error.reject("Access denied.");
+      if (not is_controller) return false;
 
       switch (name) {
         case null {};
@@ -166,6 +164,7 @@ module {
       };
 
       state.metadata.latest_update_timestamp := Prim.time();
+      return true;
     };
   };
 };
