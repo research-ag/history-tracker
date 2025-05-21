@@ -1,17 +1,17 @@
 import Buffer "mo:base/Buffer";
+import Error "mo:base/Error";
+import Int "mo:base/Int";
 import Nat "mo:base/Nat";
-import Principal "mo:base/Principal";
-import Timer "mo:base/Timer";
 import Option "mo:base/Option";
+import Principal "mo:base/Principal";
 import Result "mo:base/Result";
+import Text "mo:base/Text";
+import Time "mo:base/Time";
+import Timer "mo:base/Timer";
+
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
 
-import Debug "mo:base/Debug";
-import Text "mo:base/Text";
-import Time "mo:base/Time";
-import Int "mo:base/Int";
-import Error "mo:base/Error";
 import PT "mo:promtracker";
 
 import Http "tiny_http";
@@ -64,15 +64,7 @@ actor class HistoryTracker() = self {
   let start_time = Time.now();
 
   func uptime() : Nat {
-    let end_time = Time.now();
-    let duration : ?Nat = Nat.fromText(Int.toText(end_time - start_time));
-
-    switch (duration) {
-      case (?x) { x / 1_000_000_000 };
-      case null {
-        Debug.trap("Internal error");
-      };
-    };
+    Int.abs(Time.now() - start_time) / 1_000_000_000;
   };
 
   ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
@@ -173,13 +165,7 @@ actor class HistoryTracker() = self {
             syncSuccess.add(1);
             changesPerSync.update(info.recent_changes.size());
 
-            let end_time = Time.now();
-            let duration : ?Nat = Nat.fromText(Int.toText(end_time - start_time));
-
-            switch (duration) {
-              case (?x) { syncDuration.update((x) / 1_000_000) };
-              case null {};
-            };
+            syncDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
 
             history.sync_ongoing := false;
             open_calls -= 1;
