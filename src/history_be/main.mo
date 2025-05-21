@@ -30,13 +30,8 @@ actor class HistoryTracker() = self {
     };
   };
 
-  let pt = PT.PromTracker("", 65);
-  pt.addSystemValues();
-
   /// Number of canisters that are synchronized per iteration.
   let canisters_num_to_sync = 5;
-
-  type StableData = PT.StableData;
 
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
@@ -62,11 +57,12 @@ actor class HistoryTracker() = self {
   };
 
   let start_time = Time.now();
+  func uptime() : Nat = Int.abs(Time.now() - start_time) / 1_000_000_000;
 
-  func uptime() : Nat {
-    Int.abs(Time.now() - start_time) / 1_000_000_000;
-  };
+  let pt = PT.PromTracker("", 65);
+  stable var pt_data : PT.StableData = pt.share();
 
+  pt.addSystemValues();
   ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
   let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
   let syncSuccess = pt.addCounter("sync_success_total", "", true);
@@ -77,8 +73,6 @@ actor class HistoryTracker() = self {
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
   ignore pt.addPullValue("uptime_seconds", "", uptime);
-
-  stable var stable_data : StableData = pt.share();
 
   public query func tracked_canisters_total() : async Nat {
     List.size(history_storage);
@@ -194,13 +188,9 @@ actor class HistoryTracker() = self {
     func() : async () { await* trigger_sync() },
   );
 
-  system func preupgrade() {
-    stable_data := pt.share();
-  };
+  system func preupgrade() = pt_data := pt.share();
 
-  system func postupgrade() {
-    pt.unshare(stable_data);
-  };
+  system func postupgrade() = pt.unshare(pt_data);
 
   public query func http_request(req : Http.Request) : async Http.Response {
     let ?path = Text.split(req.url, #char '?').next() else return Http.render400();
