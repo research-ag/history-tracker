@@ -1,10 +1,11 @@
 import Principal "mo:base/Principal";
-import RBTree "mo:base/RBTree";
+import Map "mo:new-base/pure/Map";
 import Nat "mo:base/Nat";
 import Timer "mo:base/Timer";
 import Result "mo:base/Result";
 import Vector "mo:vector";
 import Buffer "mo:base/Buffer";
+import Option "mo:base/Option";
 
 import CanisterHistory "CanisterHistory";
 import Concurrent "info/concurrent_calls";
@@ -24,69 +25,68 @@ actor class HistoryTracker() = self {
   /// Number of canisters that are synchronized per iteration.
   let canisters_num_to_sync = 5;
 
-  type StableData = RBTree.Tree<Principal, Nat>; // history_storage_map
-
   /// Storage for all the canister histories.
   stable let history_storage = Vector.new<CanisterHistory.History>();
 
   /// Maps the canister id to the history instance index in the storage.
-  let history_storage_map = RBTree.RBTree<Principal, Nat>(Principal.compare);
+  stable var history_storage_map = Map.empty<Principal, Nat>();
 
-  stable var stable_data : StableData = (/* convert_hs_to_stable(history_storage), */ history_storage_map.share());
+  func get_index(canister_id : Principal) : ?Nat {
+    Map.get<Principal, Nat>(history_storage_map, Principal.compare, canister_id);
+  };
+
+  func get_history(canister_id : Principal) : ?CanisterHistory.History {
+    Option.map<Nat, CanisterHistory.History>(
+      get_index(canister_id),
+      func(i) = Vector.get(history_storage, i),
+    );
+  };
+
+  func insert_id(canister_id : Principal, index : Nat) : Bool {
+    let res = Map.insert<Principal, Nat>(history_storage_map, Principal.compare, canister_id, index);
+    history_storage_map := res.0;
+    res.1;
+  };
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool {
-    history_storage_map.get(canister_id) != null;
+    Map.get(history_storage_map, Principal.compare, canister_id) != null;
   };
 
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
-    if (history_storage_map.get(canister_id) != null) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
+    if (Option.isSome(get_index(canister_id))) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_canister_history = CanisterHistory.new(canister_id);
     ignore await* CanisterHistory.API(new_canister_history).sync();
+    let new_index : Nat = Vector.size(history_storage);
     Vector.add(history_storage, new_canister_history);
-    let last_index : Nat = Vector.size(history_storage) - 1;
-    history_storage_map.put(canister_id, last_index);
+    assert insert_id(canister_id, new_index);
     #ok();
   };
 
   public query func canister_changes(canister_id : Principal) : async ?CanisterHistory.CanisterChangesResponse {
-    switch (history_storage_map.get(canister_id)) {
-      case (null) null;
-      case (?index) {
-        let history = Vector.get(history_storage, index);
-        ?CanisterHistory.API(history).canister_changes();
-      };
-    };
+    Option.map<CanisterHistory.History, CanisterHistory.CanisterChangesResponse>(
+      get_history(canister_id),
+      func(h) = CanisterHistory.API(h).canister_changes(),
+    );
   };
 
   public query func canister_state(canister_id : Principal) : async ?CanisterHistory.CanisterStateResponse {
-    switch (history_storage_map.get(canister_id)) {
-      case (null) null;
-      case (?index) {
-        let history = Vector.get(history_storage, index);
-        ?CanisterHistory.API(history).canister_state();
-      };
-    };
+    Option.map<CanisterHistory.History, CanisterHistory.CanisterStateResponse>(
+      get_history(canister_id),
+      func(h) = CanisterHistory.API(h).canister_state(),
+    );
   };
 
   public query func metadata(canister_id : Principal) : async ?CanisterHistory.Metadata {
-    switch (history_storage_map.get(canister_id)) {
-      case (null) null;
-      case (?index) {
-        let history = Vector.get(history_storage, index);
-        ?CanisterHistory.API(history).metadata();
-      };
-    };
+    Option.map<CanisterHistory.History, CanisterHistory.Metadata>(
+      get_history(canister_id),
+      func(h) = CanisterHistory.API(h).metadata(),
+    );
   };
 
   public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.UpdateMetadata> {
-    switch (history_storage_map.get(canister_id)) {
-      case (null) return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
-      case (?index) {
-        let history = Vector.get(history_storage, index);
-        await* CanisterHistory.API(history).update_metadata(caller, name, description);
-        #ok();
-      };
-    };
+    let ?h = get_history(canister_id) else return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
+    await* CanisterHistory.API(h).update_metadata(caller, name, description);
+    #ok();
   };
 
   transient var open_calls = 0; // must be 0 when canister was stopped
@@ -140,11 +140,4 @@ actor class HistoryTracker() = self {
     func() : async () { await* trigger_sync() },
   );
 
-  system func preupgrade() {
-    stable_data := history_storage_map.share();
-  };
-
-  system func postupgrade() {
-    history_storage_map.unshare(stable_data);
-  };
 };
