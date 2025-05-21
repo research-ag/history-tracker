@@ -1,12 +1,8 @@
-import Nat64 "mo:base/Nat64";
-import Principal "mo:base/Principal";
-import Iter "mo:base/Iter";
-import Error "mo:base/Error";
-import Nat "mo:base/Nat";
 import Array "mo:base/Array";
-import Bool "mo:base/Bool";
+import Error "mo:base/Error";
+import Nat64 "mo:base/Nat64";
+import List "mo:new-base/List";
 import Prim "mo:prim";
-import Vector "mo:vector";
 
 import IC "ic";
 
@@ -22,7 +18,7 @@ module {
   };
 
   public type History = {
-    changes : Vector.Vector<ExtendedChange>; // all tracked changes
+    changes : List.List<ExtendedChange>; // all tracked changes
     var latest_change_timestamp : Nat64; // latest tracked change timestamp
     var total_num_changes : Nat64; // total number of changes
     var module_hash : ?[Nat8]; // current module hash
@@ -53,7 +49,7 @@ module {
   };
 
   public func new(canister_id : Principal) : History = {
-    changes = Vector.new<ExtendedChange>();
+    changes = List.empty<ExtendedChange>();
     var latest_change_timestamp = 0;
     var total_num_changes = 0;
     var module_hash = null;
@@ -98,9 +94,9 @@ module {
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
 
       // Merge untracked changes with already saved ones
-      for (change in Iter.fromArray(info.recent_changes)) {
+      for (change in info.recent_changes.vals()) {
         if (change.timestamp_nanos > state.latest_change_timestamp) {
-          Vector.add(
+          List.add(
             state.changes,
             {
               change with
@@ -120,7 +116,7 @@ module {
     };
 
     public func canister_changes() : CanisterChangesResponse = {
-      changes = Vector.toArray(state.changes);
+      changes = List.toArray(state.changes);
       total_num_changes = state.total_num_changes;
       timestamp_nanos = state.timestamp_nanos;
       sync_version = state.sync_version;

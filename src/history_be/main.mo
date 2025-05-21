@@ -1,11 +1,11 @@
-import Principal "mo:base/Principal";
-import Map "mo:new-base/pure/Map";
-import Nat "mo:base/Nat";
-import Timer "mo:base/Timer";
-import Result "mo:base/Result";
-import Vector "mo:vector";
 import Buffer "mo:base/Buffer";
+import Nat "mo:base/Nat";
+import Principal "mo:base/Principal";
+import Timer "mo:base/Timer";
 import Option "mo:base/Option";
+import Result "mo:base/Result";
+import Map "mo:new-base/pure/Map";
+import List "mo:new-base/List";
 
 import CanisterHistory "CanisterHistory";
 import Concurrent "info/concurrent_calls";
@@ -26,7 +26,7 @@ actor class HistoryTracker() = self {
   let canisters_num_to_sync = 5;
 
   /// Storage for all the canister histories.
-  stable let history_storage = Vector.new<CanisterHistory.History>();
+  stable let history_storage = List.empty<CanisterHistory.History>();
 
   /// Maps the canister id to the history instance index in the storage.
   stable var history_storage_map = Map.empty<Principal, Nat>();
@@ -38,7 +38,7 @@ actor class HistoryTracker() = self {
   func get_history(canister_id : Principal) : ?CanisterHistory.History {
     Option.map<Nat, CanisterHistory.History>(
       get_index(canister_id),
-      func(i) = Vector.get(history_storage, i),
+      func(i) = List.get(history_storage, i),
     );
   };
 
@@ -56,8 +56,8 @@ actor class HistoryTracker() = self {
     if (Option.isSome(get_index(canister_id))) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_canister_history = CanisterHistory.new(canister_id);
     ignore await* CanisterHistory.API(new_canister_history).sync();
-    let new_index : Nat = Vector.size(history_storage);
-    Vector.add(history_storage, new_canister_history);
+    let new_index : Nat = List.size(history_storage);
+    List.add(history_storage, new_canister_history);
     assert insert_id(canister_id, new_index);
     #ok();
   };
@@ -95,7 +95,7 @@ actor class HistoryTracker() = self {
   var sync_pos = 0;
 
   func trigger_sync() : async* () {
-    let N = Vector.size(history_storage);
+    let N = List.size(history_storage);
     let sync_num = Nat.min(canisters_num_to_sync, N);
     if (open_calls >= sync_num) return;
 
@@ -104,7 +104,7 @@ actor class HistoryTracker() = self {
 
     var ctr = 0;
     while (ctr < new_calls) {
-      let history = Vector.get(history_storage, sync_pos);
+      let history = List.get(history_storage, sync_pos);
       if (not history.sync_ongoing) {
         let item : Concurrent.Item = {
           call_arg = CanisterHistory.API(history).sync_call_arg();
