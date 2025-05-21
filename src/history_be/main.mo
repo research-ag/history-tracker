@@ -27,14 +27,14 @@ actor class HistoryTracker() = self {
   let canisters_num_to_sync = 5;
 
   type StableData = (
-    [CanisterHistory.StableData], // history_storage
+    [CanisterHistory.InternalState], // history_storage
     RBTree.Tree<Principal, Nat>, // history_storage_map
   );
 
   /// Converts the history storage to stable type.
-  func convert_hs_to_stable(data : Vector.Vector<CanisterHistory.CanisterHistory>) : [CanisterHistory.StableData] {
+  func convert_hs_to_stable(data : Vector.Vector<CanisterHistory.CanisterHistory>) : [CanisterHistory.InternalState] {
     data.vals()
-    |> Iter.map<CanisterHistory.CanisterHistory, CanisterHistory.StableData>(_, func(v) = v.share())
+    |> Iter.map<CanisterHistory.CanisterHistory, CanisterHistory.InternalState>(_, func(v) = v.share())
     |> Iter.toArray(_);
   };
 
@@ -80,7 +80,7 @@ actor class HistoryTracker() = self {
     };
   };
 
-  public query func metadata(canister_id : Principal) : async ?CanisterHistory.SharedCanisterMetadata {
+  public query func metadata(canister_id : Principal) : async ?CanisterHistory.Metadata {
     switch (history_storage_map.get(canister_id)) {
       case (null) null;
       case (?index) {
@@ -160,7 +160,7 @@ actor class HistoryTracker() = self {
     history_storage.unshare(
       (stable_data.0)
       |> Iter.fromArray(_)
-      |> Iter.map<CanisterHistory.StableData, CanisterHistory.CanisterHistory>(
+      |> Iter.map<CanisterHistory.InternalState, CanisterHistory.CanisterHistory>(
         _,
         func(v) = CanisterHistory.fromStableData(v),
       )
