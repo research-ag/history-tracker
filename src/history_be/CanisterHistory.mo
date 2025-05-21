@@ -69,13 +69,16 @@ module {
 
     public func sync() : async* Bool {
       if (state.sync_ongoing) return false;
+      state.sync_ongoing := true;
       try {
         let info = await ic.canister_info({
           canister_id = state.canister_id;
           num_requested_changes = ?20;
         });
         sync_call_process_response(info);
-      } catch (_) {} finally {
+      } catch e {
+        throw e; // re-throw any async error
+      } finally {
         state.sync_ongoing := false;
       };
       true;

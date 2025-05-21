@@ -23,6 +23,9 @@ actor class HistoryTracker() = self {
   module Errors {
     public type Track = {
       #AlreadyTracked : { message : Text };
+      #DoesNotExist : { message : Text };
+      #Busy : { message : Text };
+      #Unexpected : { message : Text };
     };
 
     public type UpdateMetadata = {
@@ -85,7 +88,15 @@ actor class HistoryTracker() = self {
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
     if (Option.isSome(get_index(canister_id))) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_canister_history = CanisterHistory.new(canister_id);
-    ignore await* CanisterHistory.API(new_canister_history).sync();
+    try {
+      ignore await* CanisterHistory.API(new_canister_history).sync();
+    } catch (e) {
+      switch (Error.code(e)) {
+        case (#destination_invalid) return #err(#DoesNotExist({ message = "The canister does not exist." }));
+        case (#system_transient or #system_unknown) return #err(#Busy({ message = "The system is busy. Try again." }));
+        case (_) return #err(#Unexpected({ message = "An unexpected error was encountered: " # Error.message(e) }));
+      };
+    };
     let new_index : Nat = List.size(history_storage);
     List.add(history_storage, new_canister_history);
     assert insert_id(canister_id, new_index);
