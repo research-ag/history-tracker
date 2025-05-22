@@ -93,9 +93,15 @@ actor class HistoryTracker() = self {
 
   func track_error(e : Error.Error) : Errors.Track {
     switch (Error.code(e)) {
-      case (#destination_invalid) return #DoesNotExist({ message = "The canister does not exist." });
-      case (#system_transient or #system_unknown) return #Busy({ message = "The system is busy. Try again." });
-      case (_) return #Unexpected({ message = "An unexpected error was encountered: " # Error.message(e) });
+      case (#destination_invalid) return #DoesNotExist({
+        message = "The canister does not exist.";
+      });
+      case (#system_transient or #system_unknown) return #Busy({
+        message = "The system is busy. Try again.";
+      });
+      case (_) return #Unexpected({
+        message = "An unexpected error was encountered: " # Error.message(e);
+      });
     };
   };
 
@@ -187,52 +193,70 @@ actor class HistoryTracker() = self {
   };
 
   transient var open_calls = 0; // must be 0 when canister was stopped
-  transient var trapsDetected = 0;
+  stable var trapsDetected = 0;
 
-  var sync_pos = 0;
+  stable var sync_pos = 0;
+  stable var round_start = 0;
+
+  stable let backlog = List.empty<CanisterHistory.History>();
+  stable var backlog_pos = 0;
+
+  func callItem(h : CanisterHistory.History) : Concurrent.Item {
+    let start_time = Time.now();
+    {
+      call_arg = CanisterHistory.API(h).sync_call_arg();
+      register_call = func() {
+        syncAttempts.add(1);
+        open_calls += 1;
+      };
+      process_response = func(info) {
+        CanisterHistory.API(h).sync_call_process_response(info);
+        syncSuccess.add(1);
+        changesPerSync.update(info.recent_changes.size());
+        syncDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+        open_calls -= 1;
+      };
+      process_error = func(_) {
+        syncFailure.add(1);
+        List.add(backlog, h);
+        open_calls -= 1;
+      };
+    };
+
+  };
 
   func trigger_sync() : async* () {
-    let N = List.size(history_storage);
-    let sync_num = Nat.min(canisters_num_to_sync, N);
-    if (open_calls >= sync_num) return;
-
-    let new_calls : Nat = sync_num - open_calls;
-    let calls = Buffer.Buffer<Concurrent.Item>(new_calls);
-
+    let calls = Buffer.Buffer<Concurrent.Item>(canisters_num_to_sync);
     var ctr = 0;
-    while (ctr < new_calls) {
-      let history = List.get(history_storage, sync_pos);
-      if (not history.sync_ongoing) {
-        var start_time = Time.now();
-        let item : Concurrent.Item = {
-          call_arg = CanisterHistory.API(history).sync_call_arg();
-          register_call = func() {
-            start_time := Time.now();
-            syncAttempts.add(1);
-            history.sync_ongoing := true;
-            open_calls += 1;
-          };
-          process_response = func(info) {
-            CanisterHistory.API(history).sync_call_process_response(info);
-            syncSuccess.add(1);
-            changesPerSync.update(info.recent_changes.size());
 
-            syncDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
-
-            history.sync_ongoing := false;
-            open_calls -= 1;
-          };
-          process_error = func(_) {
-            syncFailure.add(1);
-            history.sync_ongoing := false;
-            open_calls -= 1;
-          };
-        };
-        calls.add(item);
+    func addList(l : List.List<CanisterHistory.History>, start : Nat) : Nat {
+      var i = start;
+      while (ctr < canisters_num_to_sync and i < List.size(l)) {
+        let history = List.get(l, i);
+        calls.add(callItem(history));
+        ctr += 1;
+        i += 1;
       };
-      ctr += 1;
-      sync_pos += 1;
-      if (sync_pos >= N) sync_pos -= N;
+      i;
+    };
+
+    // process backlog first
+    backlog_pos := addList(backlog, backlog_pos);
+
+    // now continue normal sync, but:
+    // We only start a new round if all calls from the previous round have
+    // returned and 5 min has passed since the last round started.
+    // All calls from the previous round have returned if open_calls is 0 and
+    // we are not scheduling new ones from the backlog.
+    if (
+      sync_pos > 0 or (
+        calls.size() == 0 and
+        open_calls == 0 and
+        Time.now() >= round_start + 300_000_000_000
+      )
+    ) {
+      sync_pos := addList(history_storage, sync_pos);
+      if (sync_pos == List.size(history_storage)) sync_pos := 0;
     };
 
     await* Concurrent.make_calls(

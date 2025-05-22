@@ -30,7 +30,6 @@ module {
       var latest_update_timestamp : Nat64;
     };
     canister_id : Principal;
-    var sync_ongoing : Bool;
   };
 
   public type CanisterChangesResponse = {
@@ -61,30 +60,21 @@ module {
       var latest_update_timestamp = 0;
     };
     canister_id;
-    var sync_ongoing = false;
   };
 
   let ic = actor "aaaaa-aa" : IC.Management;
   public class API(state : History) {
 
     public func sync() : async* Bool {
-      if (state.sync_ongoing) return false;
-      state.sync_ongoing := true;
-      try {
-        let info = await ic.canister_info({
-          canister_id = state.canister_id;
-          num_requested_changes = ?20;
-        });
-        sync_call_process_response(info);
-      } finally {
-        state.sync_ongoing := false;
-      };
+      // no try-catch => async errors are passed through to the caller
+      let info = await ic.canister_info(sync_call_arg());
+      sync_call_process_response(info);
       true;
     };
 
     public func sync_call_arg() : IC.CanisterInfoRequest = {
       canister_id = state.canister_id;
-      num_requested_changes = ?Nat64.fromNat(20);
+      num_requested_changes = ?20;
     };
 
     public func sync_call_process_response(info : IC.CanisterInfoResponse) {
