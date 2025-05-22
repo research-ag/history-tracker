@@ -68,8 +68,6 @@ actor class HistoryTracker() = self {
   func uptime() : Nat = Int.abs(Time.now() - start_time) / 1_000_000_000;
 
   let pt = PT.PromTracker("", 65);
-  stable var pt_data : PT.StableData = pt.share();
-
   pt.addSystemValues();
   ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
   let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
@@ -81,6 +79,9 @@ actor class HistoryTracker() = self {
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
   ignore pt.addPullValue("uptime_seconds", "", uptime);
+
+  stable var pt_data : PT.StableData = null;
+  pt.unshare(pt_data);
 
   public query func tracked_canisters_total() : async Nat {
     List.size(history_storage);
@@ -246,8 +247,6 @@ actor class HistoryTracker() = self {
   );
 
   system func preupgrade() = pt_data := pt.share();
-
-  system func postupgrade() = pt.unshare(pt_data);
 
   public query func http_request(req : Http.Request) : async Http.Response {
     let ?path = Text.split(req.url, #char '?').next() else return Http.render400();
