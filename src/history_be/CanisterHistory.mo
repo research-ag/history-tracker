@@ -76,8 +76,6 @@ module {
           num_requested_changes = ?20;
         });
         sync_call_process_response(info);
-      } catch e {
-        throw e; // re-throw any async error
       } finally {
         state.sync_ongoing := false;
       };
