@@ -200,11 +200,15 @@ actor class HistoryTracker() = self {
   stable let backlog = List.empty<CanisterHistory.History>();
   stable var backlog_pos = 0;
 
-  func callItem(h : CanisterHistory.History) : Concurrent.Item {
+  func inc_sync_pos() = sync_pos += 1;
+  func inc_backlog_pos() = backlog_pos += 1;
+
+  func callItem(h : CanisterHistory.History, register_cb : () -> ()) : Concurrent.Item {
     let start_time = Time.now();
     {
       call_arg = CanisterHistory.API(h).sync_call_arg();
       register_call = func() {
+        register_cb();
         syncAttempts.add(1);
         open_calls += 1;
       };
@@ -220,32 +224,31 @@ actor class HistoryTracker() = self {
         open_calls -= 1;
       };
     };
-
   };
 
   func trigger_sync() : async* () {
     let calls = Buffer.Buffer<Concurrent.Item>(canisters_num_to_sync);
     var ctr = 0;
 
-    func addList(l : List.List<CanisterHistory.History>, start : Nat) : Nat {
+    func addList(l : List.List<CanisterHistory.History>, start : Nat, register_cb : () -> ()) {
       var i = start;
       while (ctr < canisters_num_to_sync and i < List.size(l)) {
         let history = List.get(l, i);
-        calls.add(callItem(history));
+        calls.add(callItem(history, register_cb));
         ctr += 1;
         i += 1;
       };
-      i;
     };
 
     // process backlog first
-    backlog_pos := addList(backlog, backlog_pos);
+    addList(backlog, backlog_pos, inc_backlog_pos);
 
     // now continue normal sync, but:
     // We only start a new round if all calls from the previous round have
     // returned and 5 min has passed since the last round started.
     // All calls from the previous round have returned if open_calls is 0 and
     // we are not scheduling new ones from the backlog.
+    if (sync_pos == List.size(history_storage)) sync_pos := 0;
     if (
       sync_pos > 0 or (
         calls.size() == 0 and
@@ -253,8 +256,7 @@ actor class HistoryTracker() = self {
         Time.now() >= round_start + 300_000_000_000
       )
     ) {
-      sync_pos := addList(history_storage, sync_pos);
-      if (sync_pos == List.size(history_storage)) sync_pos := 0;
+      addList(history_storage, sync_pos, inc_sync_pos);
     };
 
     await* Concurrent.make_calls(
