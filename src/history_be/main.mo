@@ -35,7 +35,7 @@ actor class HistoryTracker() = self {
   };
 
   /// Number of canisters that are synchronized per iteration.
-  let canisters_num_to_sync = 5;
+  let canisters_num_to_sync = 100;
 
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
@@ -71,9 +71,8 @@ actor class HistoryTracker() = self {
   pt.addSystemValues();
   ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
   let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
-  let syncSuccess = pt.addCounter("sync_success_total", "", true);
-  let syncFailure = pt.addCounter("sync_failure_total", "", true);
-  let syncDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
+  let syncSuccessDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
+  let syncFailureDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
   let changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
@@ -211,14 +210,13 @@ actor class HistoryTracker() = self {
       };
       process_response = func(info) {
         CanisterHistory.API(h).sync_call_process_response(info);
-        syncSuccess.add(1);
         changesPerSync.update(info.recent_changes.size());
-        syncDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+        syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
         open_calls -= 1;
       };
       process_error = func(_) {
-        syncFailure.add(1);
         List.add(backlog, h);
+        syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
         open_calls -= 1;
       };
     };
@@ -261,7 +259,7 @@ actor class HistoryTracker() = self {
 
     await* Concurrent.make_calls(
       Buffer.toArray(calls),
-      func(i) { syncFailure.add(1); trapsDetected += 1 }, // trap_cb
+      func(i) { trapsDetected += 1 }, // trap_cb
     );
   };
 
