@@ -218,8 +218,11 @@ actor class HistoryTracker() = self {
         syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
         open_calls -= 1;
       };
-      process_error = func(_) {
-        List.add(backlog, h);
+      process_error = func(e) {
+        switch (Error.code(e)) {
+          case (#system_transient or #system_unknown) List.add(backlog, h); 
+          case (_) {}; // canister was deleted, skip it
+        };
         syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
         open_calls -= 1;
       };
