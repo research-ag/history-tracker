@@ -1,3 +1,4 @@
+import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
@@ -59,6 +60,10 @@ actor class HistoryTracker() = self {
     res.1;
   };
 
+  func exists_id(canister_id : Principal) : Bool {
+    Map.containsKey(history_storage_map, Principal.compare, canister_id);
+  };
+
   let start_time = Time.now();
   func uptime() : Nat = Int.abs(Time.now() - start_time) / 1_000_000_000;
 
@@ -85,22 +90,63 @@ actor class HistoryTracker() = self {
     Map.get(history_storage_map, Principal.compare, canister_id) != null;
   };
 
+  func track_error(e : Error.Error) : Errors.Track {
+    switch (Error.code(e)) {
+      case (#destination_invalid) return #DoesNotExist({ message = "The canister does not exist." });
+      case (#system_transient or #system_unknown) return #Busy({ message = "The system is busy. Try again." });
+      case (_) return #Unexpected({ message = "An unexpected error was encountered: " # Error.message(e) });
+    };
+  };
+
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
     if (Option.isSome(get_index(canister_id))) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_canister_history = CanisterHistory.new(canister_id);
     try {
       ignore await* CanisterHistory.API(new_canister_history).sync();
     } catch (e) {
-      switch (Error.code(e)) {
-        case (#destination_invalid) return #err(#DoesNotExist({ message = "The canister does not exist." }));
-        case (#system_transient or #system_unknown) return #err(#Busy({ message = "The system is busy. Try again." }));
-        case (_) return #err(#Unexpected({ message = "An unexpected error was encountered: " # Error.message(e) }));
-      };
+      return #err(track_error(e));
     };
     let new_index : Nat = List.size(history_storage);
     List.add(history_storage, new_canister_history);
     assert insert_id(canister_id, new_index);
     #ok();
+  };
+
+  public func trackMany(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
+    let len = canister_ids.size();
+    if (len > 100) throw Error.reject("Not more than 10 canister ids allowed in input.");
+
+    let results = Array.init<Result.Result<(), Errors.Track>>(len, #ok());
+    let calls = Buffer.Buffer<Concurrent.Item>(len);
+
+    label L for (i in canister_ids.keys()) {
+      let id = canister_ids[i];
+      if (exists_id(id)) {
+        results[i] := #err(#AlreadyTracked({ message = "The canister is already tracked." }));
+        continue L;
+      };
+      let new_canister_history = CanisterHistory.new(id);
+      let item : Concurrent.Item = {
+        call_arg = CanisterHistory.API(new_canister_history).sync_call_arg();
+        register_call = func() {};
+        process_response = func(info) {
+          CanisterHistory.API(new_canister_history).sync_call_process_response(info);
+          let new_index : Nat = List.size(history_storage);
+          List.add(history_storage, new_canister_history);
+          assert insert_id(id, new_index);
+        };
+        process_error = func(e) {
+          results[i] := #err(track_error(e));
+        };
+      };
+      calls.add(item);
+    };
+
+    await* Concurrent.make_calls(
+      Buffer.toArray(calls),
+      func(i) { trapsDetected += 1 }, // trap_cb
+    );
+    Array.freeze(results);
   };
 
   public query func canister_changes(canister_id : Principal) : async ?CanisterHistory.CanisterChangesResponse {
@@ -126,17 +172,17 @@ actor class HistoryTracker() = self {
 
   public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.UpdateMetadata> {
     let ?h = get_history(canister_id) else return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
-        let result = await* CanisterHistory.API(h).update_metadata(caller, name, description);
-        switch (result) {
-          case true {
-            metadataUpdates.add(1);
-            #ok();
-          };
-          case false {
-            unauthorizedMetadataUpdates.add(1);
-            throw Error.reject("Access denied.");
-          };
-        };
+    let result = await* CanisterHistory.API(h).update_metadata(caller, name, description);
+    switch (result) {
+      case true {
+        metadataUpdates.add(1);
+        #ok();
+      };
+      case false {
+        unauthorizedMetadataUpdates.add(1);
+        throw Error.reject("Access denied.");
+      };
+    };
   };
 
   transient var open_calls = 0; // must be 0 when canister was stopped
