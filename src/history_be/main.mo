@@ -35,7 +35,11 @@ actor class HistoryTracker() = self {
   };
 
   /// Number of canisters that are synchronized per iteration.
-  let canisters_num_to_sync = 100;
+  var canisters_num_to_sync = 100;
+
+  public func setNumToSync(n : Nat) {
+    canisters_num_to_sync := n;
+  };
 
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
@@ -67,17 +71,44 @@ actor class HistoryTracker() = self {
   let start_time = Time.now();
   func uptime() : Nat = Int.abs(Time.now() - start_time) / 1_000_000_000;
 
+  // must be 0 when canister was stopped, but we declare it stable to test whether that is true
+  stable var open_calls = 0;
+
+  // During the testing phase we don't declare these stable
+  // Resetting them to 0 makes it easier to interpret Grafana
+  var trapsDetected = 0;
+  var round = 0;
+
+  var sync_pos = 0;
+  var round_start = 0;
+
+  let backlog = List.empty<CanisterHistory.History>();
+  var backlog_pos = 0;
+
+  func inc_sync_pos() = sync_pos += 1;
+  func inc_backlog_pos() = backlog_pos += 1;
+
+  // PromTracker
   let pt = PT.PromTracker("", 65);
   pt.addSystemValues();
-  ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
-  let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
+  // gauges
   let syncSuccessDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
   let syncFailureDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
   let changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
-  ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
+  // counters
+  let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
+  // pull values
+  ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
   ignore pt.addPullValue("uptime_seconds", "", uptime);
+  ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
+  ignore pt.addPullValue("backlog_size", "", func() = List.size(backlog));
+  ignore pt.addPullValue("backlog_pos", "", func() = backlog_pos);
+  ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
+  ignore pt.addPullValue("sync_pos", "", func() = sync_pos);
+  ignore pt.addPullValue("round_start", "", func() = round_start);
+  ignore pt.addPullValue("round", "", func() = round);
 
   stable var pt_data : PT.StableData = null;
   pt.unshare(pt_data);
@@ -191,18 +222,6 @@ actor class HistoryTracker() = self {
     };
   };
 
-  transient var open_calls = 0; // must be 0 when canister was stopped
-  stable var trapsDetected = 0;
-
-  stable var sync_pos = 0;
-  stable var round_start = 0;
-
-  stable let backlog = List.empty<CanisterHistory.History>();
-  stable var backlog_pos = 0;
-
-  func inc_sync_pos() = sync_pos += 1;
-  func inc_backlog_pos() = backlog_pos += 1;
-
   func callItem(h : CanisterHistory.History, register_cb : () -> ()) : Concurrent.Item {
     let start_time = Time.now();
     {
@@ -220,7 +239,7 @@ actor class HistoryTracker() = self {
       };
       process_error = func(e) {
         switch (Error.code(e)) {
-          case (#system_transient or #system_unknown) List.add(backlog, h); 
+          case (#system_transient or #system_unknown) List.add(backlog, h);
           case (_) {}; // canister was deleted, skip it
         };
         syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
@@ -251,7 +270,10 @@ actor class HistoryTracker() = self {
     // returned and 5 min has passed since the last round started.
     // All calls from the previous round have returned if open_calls is 0 and
     // we are not scheduling new ones from the backlog.
-    if (sync_pos == List.size(history_storage)) sync_pos := 0;
+    if (sync_pos == List.size(history_storage)) {
+      sync_pos := 0;
+      round += 1;
+    };
     if (
       sync_pos > 0 or (
         calls.size() == 0 and
