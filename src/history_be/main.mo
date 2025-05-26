@@ -96,6 +96,7 @@ actor class HistoryTracker() = self {
   let syncFailureDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
   let changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
   // counters
+  let triggers = pt.addCounter("triggers_total", "", true);
   let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
@@ -249,6 +250,7 @@ actor class HistoryTracker() = self {
   };
 
   func trigger_sync() : async* () {
+    triggers.add(1);
     let calls = Buffer.Buffer<Concurrent.Item>(canisters_num_to_sync);
     var ctr = 0;
 
