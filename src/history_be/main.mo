@@ -1,5 +1,6 @@
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
+import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
@@ -70,7 +71,7 @@ actor class HistoryTracker() = self {
   func uptime() : Nat = Int.abs(Time.now() - start_time) / 1_000_000_000;
 
   // must be 0 when canister was stopped, but we declare it stable to test whether that is true
-  stable var open_calls = 0;
+  var open_calls = 0;
 
   // During the testing phase we don't declare these stable
   // Resetting them to 0 makes it easier to interpret Grafana
@@ -90,14 +91,16 @@ actor class HistoryTracker() = self {
   let pt = PT.PromTracker("", 65);
   pt.addSystemValues();
   // gauges
-  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
-  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
-  let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
-  let pt_openCalls = pt.addGauge("open_calls_at_trigger", "", #both, [], true);
-  let pt_backlog = pt.addGauge("backlog_at_trigger", "", #both, [], true);
+  func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base**(i-1));
+  func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
+  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
+  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
+  let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
+  let pt_openCalls = pt.addGauge("open_calls_at_trigger", "", #both, logarithmic(10, 2, 1), false);
+  let pt_backlog = pt.addGauge("backlog_at_trigger", "", #both, logarithmic(10, 2, 1), false);
   // counters
-  let pt_triggers = pt.addCounter("triggers_total", "", true);
-  let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", true);
+  let pt_triggers = pt.addCounter("triggers_total", "", false);
+  let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
   let pt_metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let pt_unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
   // pull values constants
@@ -255,7 +258,8 @@ actor class HistoryTracker() = self {
   func trigger_sync() : async* () {
     pt_triggers.add(1);
     pt_openCalls.update(open_calls);
-    pt_backlog.update(open_calls);
+    Debug.print("Open calls: " # debug_show open_calls);
+    pt_backlog.update(List.size(backlog));
     let calls = Buffer.Buffer<Concurrent.Item>(canisters_num_to_sync);
     var ctr = 0;
 
