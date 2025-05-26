@@ -37,9 +37,7 @@ actor class HistoryTracker() = self {
   /// Number of canisters that are synchronized per iteration.
   var canisters_num_to_sync = 100;
 
-  public func setNumToSync(n : Nat) {
-    canisters_num_to_sync := n;
-  };
+  var rounds_interval = 300_000_000_000;
 
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
@@ -281,7 +279,7 @@ actor class HistoryTracker() = self {
       sync_pos > 0 or (
         calls.size() == 0 and
         open_calls == 0 and
-        Time.now() >= round_start + 300_000_000_000
+        Time.now() >= round_start + rounds_interval
       )
     ) {
       addList(history_storage, sync_pos, inc_sync_pos);
@@ -293,10 +291,41 @@ actor class HistoryTracker() = self {
     );
   };
 
-  ignore Timer.recurringTimer<system>(
+  var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
     #seconds 60,
     func() : async () { await* trigger_sync() },
   );
+
+  // ADMIN API
+  public func startTriggerTimer(intervalSeconds : Nat) : async () {
+    switch (triggerTimer) {
+      case (null) {
+        triggerTimer := ?Timer.recurringTimer<system>(
+          #seconds intervalSeconds,
+          func() : async () { await* trigger_sync() },
+        );
+      };
+      case (_) {};
+    };
+  };
+
+  public func stopTriggerTimer() : async () {
+    switch (triggerTimer) {
+      case (?t) {
+        Timer.cancelTimer(t);
+        triggerTimer := null;
+      };
+      case (_) {};
+    };
+  };
+
+  public func setNumToSync(n : Nat) {
+    canisters_num_to_sync := n;
+  };
+
+  public func setRoundsInterval(n : Nat) {
+    rounds_interval := n;
+  };
 
   system func preupgrade() = pt_data := pt.share();
 
