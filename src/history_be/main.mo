@@ -37,7 +37,7 @@ actor class HistoryTracker() = self {
   /// Number of canisters that are synchronized per iteration.
   var canisters_num_to_sync = 100;
 
-  var rounds_interval = 300_000_000_000;
+  var rounds_interval = 300;
 
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
@@ -275,14 +275,20 @@ actor class HistoryTracker() = self {
       sync_pos := 0;
       round += 1;
     };
-    if (
-      sync_pos > 0 or (
-        calls.size() == 0 and
-        open_calls == 0 and
-        Time.now() >= round_start + rounds_interval
-      )
-    ) {
+
+    if (sync_pos > 0) {
+      // continue round
       addList(history_storage, sync_pos, inc_sync_pos);
+    } else {
+      // wait for backlog and open calls to clean
+      if (calls.size() == 0 and open_calls == 0) {
+        let now = Time.now();
+        // wait for minimum round interval
+        if (now >= round_start + rounds_interval) {
+          addList(history_storage, sync_pos, inc_sync_pos);
+          round_start := Int.abs(now) / 1_000_000_000;
+        };
+      };
     };
 
     await* Concurrent.make_calls(
