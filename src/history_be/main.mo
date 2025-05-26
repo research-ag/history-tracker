@@ -96,8 +96,8 @@ actor class HistoryTracker() = self {
   let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
   let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
-  let pt_openCalls = pt.addGauge("open_calls_at_trigger", "", #both, logarithmic(10, 2, 1), false);
-  let pt_backlog = pt.addGauge("backlog_at_trigger", "", #both, logarithmic(10, 2, 1), false);
+  let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
+  let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
   // counters
   let pt_triggers = pt.addCounter("triggers_total", "", false);
   let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
