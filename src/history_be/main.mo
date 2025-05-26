@@ -110,6 +110,7 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("sync_pos", "", func() = sync_pos);
   ignore pt.addPullValue("round_start", "", func() = round_start);
   ignore pt.addPullValue("round", "", func() = round);
+  ignore pt.addPullValue("open_calls", "", func() = open_calls);
 
   stable var pt_data : PT.StableData = null;
   pt.unshare(pt_data);
