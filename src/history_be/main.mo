@@ -98,8 +98,10 @@ actor class HistoryTracker() = self {
   let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
   let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
-  // pull values
+  // pull values constants
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
+  ignore pt.addPullValue("rounds_interval", "", func() = rounds_interval);
+  // pull values variables
   ignore pt.addPullValue("uptime_seconds", "", uptime);
   ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
   ignore pt.addPullValue("backlog_size", "", func() = List.size(backlog));
@@ -266,24 +268,20 @@ actor class HistoryTracker() = self {
     // process backlog first
     addList(backlog, backlog_pos, inc_backlog_pos);
 
-    // now continue normal sync, but:
-    // We only start a new round if all calls from the previous round have
-    // returned and 5 min has passed since the last round started.
-    // All calls from the previous round have returned if open_calls is 0 and
-    // we are not scheduling new ones from the backlog.
+    // detect the end of a round
     if (sync_pos == List.size(history_storage)) {
       sync_pos := 0;
       round += 1;
     };
 
     if (sync_pos > 0) {
-      // continue round
+      // continue a running round
       addList(history_storage, sync_pos, inc_sync_pos);
     } else {
-      // wait for backlog and open calls to clean
+      // before starting a new round wait for backlog and open calls to clean
       if (calls.size() == 0 and open_calls == 0) {
         let now = Time.now();
-        // wait for minimum round interval
+        // also wait for minimum round interval to pass
         if (now >= round_start + rounds_interval) {
           addList(history_storage, sync_pos, inc_sync_pos);
           round_start := Int.abs(now) / 1_000_000_000;
