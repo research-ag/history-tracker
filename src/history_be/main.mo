@@ -151,7 +151,7 @@ actor class HistoryTracker() = self {
 
   public func trackMany(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
     let len = canister_ids.size();
-    if (len > 100) throw Error.reject("Not more than 10 canister ids allowed in input.");
+    if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
 
     let results = Array.init<Result.Result<(), Errors.Track>>(len, #ok());
     let calls = Buffer.Buffer<Concurrent.Item>(len);
