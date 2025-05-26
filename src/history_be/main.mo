@@ -90,14 +90,16 @@ actor class HistoryTracker() = self {
   let pt = PT.PromTracker("", 65);
   pt.addSystemValues();
   // gauges
-  let syncSuccessDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
-  let syncFailureDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
-  let changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
+  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
+  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration_ms", "", #both, [], true);
+  let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, [], true);
+  let pt_openCalls = pt.addGauge("open_calls_at_trigger", "", #both, [], true);
+  let pt_backlog = pt.addGauge("backlog_at_trigger", "", #both, [], true);
   // counters
-  let triggers = pt.addCounter("triggers_total", "", true);
-  let syncAttempts = pt.addCounter("sync_attempts_total", "", true);
-  let metadataUpdates = pt.addCounter("metadata_update_total", "", true);
-  let unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
+  let pt_triggers = pt.addCounter("triggers_total", "", true);
+  let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", true);
+  let pt_metadataUpdates = pt.addCounter("metadata_update_total", "", true);
+  let pt_unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
   // pull values constants
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
   ignore pt.addPullValue("rounds_interval", "", func() = rounds_interval);
@@ -214,11 +216,11 @@ actor class HistoryTracker() = self {
     let result = await* CanisterHistory.API(h).update_metadata(caller, name, description);
     switch (result) {
       case true {
-        metadataUpdates.add(1);
+        pt_metadataUpdates.add(1);
         #ok();
       };
       case false {
-        unauthorizedMetadataUpdates.add(1);
+        pt_unauthorizedMetadataUpdates.add(1);
         throw Error.reject("Access denied.");
       };
     };
@@ -230,13 +232,13 @@ actor class HistoryTracker() = self {
       call_arg = CanisterHistory.API(h).sync_call_arg();
       register_call = func() {
         register_cb();
-        syncAttempts.add(1);
+        pt_syncAttempts.add(1);
         open_calls += 1;
       };
       process_response = func(info) {
         CanisterHistory.API(h).sync_call_process_response(info);
-        changesPerSync.update(info.recent_changes.size());
-        syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+        pt_changesPerSync.update(info.recent_changes.size());
+        pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
         open_calls -= 1;
       };
       process_error = func(e) {
@@ -244,14 +246,16 @@ actor class HistoryTracker() = self {
           case (#system_transient or #system_unknown) List.add(backlog, h);
           case (_) {}; // canister was deleted, skip it
         };
-        syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+        pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
         open_calls -= 1;
       };
     };
   };
 
   func trigger_sync() : async* () {
-    triggers.add(1);
+    pt_triggers.add(1);
+    pt_openCalls.update(open_calls);
+    pt_backlog.update(open_calls);
     let calls = Buffer.Buffer<Concurrent.Item>(canisters_num_to_sync);
     var ctr = 0;
 
