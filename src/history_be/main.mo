@@ -91,7 +91,7 @@ actor class HistoryTracker() = self {
   let pt = PT.PromTracker("", 65);
   pt.addSystemValues();
   // gauges
-  func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base**(i-1));
+  func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
   let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
   let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
@@ -260,12 +260,15 @@ actor class HistoryTracker() = self {
     pt_openCalls.update(open_calls);
     Debug.print("Open calls: " # debug_show open_calls);
     pt_backlog.update(List.size(backlog));
-    let calls = Buffer.Buffer<Concurrent.Item>(canisters_num_to_sync);
+
+    let callsToSpawn : Nat = canisters_num_to_sync - open_calls;
+    
+    let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
     var ctr = 0;
 
     func addList(l : List.List<CanisterHistory.History>, start : Nat, register_cb : () -> ()) {
       var i = start;
-      while (ctr < canisters_num_to_sync and i < List.size(l)) {
+      while (ctr < callsToSpawn and i < List.size(l)) {
         let history = List.get(l, i);
         calls.add(callItem(history, register_cb));
         ctr += 1;
