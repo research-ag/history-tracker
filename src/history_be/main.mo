@@ -291,6 +291,8 @@ actor class HistoryTracker() = self {
 
       // TODO add other tasks to the list here
 
+      // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
+
       for (history in RoundRobin.roundRobinCollect(List.toArray(tasks), callsToSpawn).vals()) {
         calls.add(callItem(history));
       };
