@@ -103,6 +103,7 @@ actor class HistoryTracker() = self {
   let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
   let pt_metadataUpdates = pt.addCounter("metadata_update_total", "", true);
   let pt_unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
+  let pt_trigger_interval = pt.addCounter("trigger_interval", "", false);
   // pull values constants
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
   ignore pt.addPullValue("rounds_interval", "", func() = rounds_interval);
@@ -310,6 +311,7 @@ actor class HistoryTracker() = self {
     #seconds 60,
     func() : async () { await* trigger_sync() },
   );
+  pt_trigger_interval.set(60);
 
   // ADMIN API
   public func startTriggerTimer(intervalSeconds : Nat) : async () {
@@ -322,6 +324,7 @@ actor class HistoryTracker() = self {
       };
       case (_) {};
     };
+    pt_trigger_interval.set(intervalSeconds);
   };
 
   public func stopTriggerTimer() : async () {
@@ -332,6 +335,7 @@ actor class HistoryTracker() = self {
       };
       case (_) {};
     };
+    pt_trigger_interval.set(0);
   };
 
   public func setNumToSync(n : Nat) {
