@@ -13,12 +13,14 @@ import Timer "mo:base/Timer";
 
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
+import Queue "mo:new-base/Queue";
 
 import PT "mo:promtracker";
 
 import Http "tiny_http";
 import CanisterHistory "CanisterHistory";
 import Concurrent "info/concurrent_calls";
+import RoundRobin "round_robin";
 
 actor class HistoryTracker() = self {
 
@@ -43,6 +45,10 @@ actor class HistoryTracker() = self {
   /// Storage for all the canister histories.
   stable let history_storage = List.empty<CanisterHistory.History>();
 
+  // TODO stable
+  let all_canisters : RoundRobin.RoundRobinBuffer<CanisterHistory.History> = RoundRobin.RoundRobinBuffer<CanisterHistory.History>();
+  all_canisters.items := history_storage;
+
   /// Maps the canister id to the history instance index in the storage.
   stable var history_storage_map = Map.empty<Principal, Nat>();
 
@@ -53,7 +59,7 @@ actor class HistoryTracker() = self {
   func get_history(canister_id : Principal) : ?CanisterHistory.History {
     Option.map<Nat, CanisterHistory.History>(
       get_index(canister_id),
-      func(i) = List.get(history_storage, i),
+      func(i) = List.get(all_canisters.items, i),
     );
   };
 
@@ -76,16 +82,8 @@ actor class HistoryTracker() = self {
   // During the testing phase we don't declare these stable
   // Resetting them to 0 makes it easier to interpret Grafana
   var trapsDetected = 0;
-  var round = 0;
-
-  var sync_pos = 0;
   var round_start = 0;
-
-  let backlog = List.empty<CanisterHistory.History>();
-  var backlog_pos = 0;
-
-  func inc_sync_pos() = sync_pos += 1;
-  func inc_backlog_pos() = backlog_pos += 1;
+  let backlog = Queue.empty<CanisterHistory.History>();
 
   // PromTracker
   let pt = PT.PromTracker("", 65);
@@ -109,19 +107,18 @@ actor class HistoryTracker() = self {
   // pull values variables
   ignore pt.addPullValue("uptime_seconds", "", uptime);
   ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
-  ignore pt.addPullValue("backlog_size", "", func() = List.size(backlog));
-  ignore pt.addPullValue("backlog_pos", "", func() = backlog_pos);
-  ignore pt.addPullValue("tracked_canisters_total", "", func() = List.size(history_storage));
-  ignore pt.addPullValue("sync_pos", "", func() = sync_pos);
+  ignore pt.addPullValue("backlog_size", "", func() = Queue.size(backlog));
+  ignore pt.addPullValue("tracked_canisters_total", "", func() = all_canisters.size());
+  ignore pt.addPullValue("sync_pos", "", func() = all_canisters.ctr());
   ignore pt.addPullValue("round_start", "", func() = round_start);
-  ignore pt.addPullValue("round", "", func() = round);
+  ignore pt.addPullValue("round", "", func() = all_canisters.round());
   ignore pt.addPullValue("open_calls", "", func() = open_calls);
 
   stable var pt_data : PT.StableData = null;
   pt.unshare(pt_data);
 
   public query func tracked_canisters_total() : async Nat {
-    List.size(history_storage);
+    all_canisters.size();
   };
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool {
@@ -150,8 +147,8 @@ actor class HistoryTracker() = self {
     } catch (e) {
       return #err(track_error(e));
     };
-    let new_index : Nat = List.size(history_storage);
-    List.add(history_storage, new_canister_history);
+    let new_index : Nat = all_canisters.size();
+    all_canisters.insertItem(new_canister_history);
     assert insert_id(canister_id, new_index);
     #ok();
   };
@@ -175,8 +172,8 @@ actor class HistoryTracker() = self {
         register_call = func() {};
         process_response = func(info) {
           CanisterHistory.API(new_canister_history).sync_call_process_response(info);
-          let new_index : Nat = List.size(history_storage);
-          List.add(history_storage, new_canister_history);
+          let new_index : Nat = all_canisters.size();
+          all_canisters.insertItem(new_canister_history);
           assert insert_id(id, new_index);
         };
         process_error = func(e) {
@@ -229,12 +226,11 @@ actor class HistoryTracker() = self {
     };
   };
 
-  func callItem(h : CanisterHistory.History, register_cb : () -> ()) : Concurrent.Item {
+  func callItem(h : CanisterHistory.History) : Concurrent.Item {
     let start_time = Time.now();
     {
       call_arg = CanisterHistory.API(h).sync_call_arg();
       register_call = func() {
-        register_cb();
         pt_syncAttempts.add(1);
         open_calls += 1;
       };
@@ -246,7 +242,7 @@ actor class HistoryTracker() = self {
       };
       process_error = func(e) {
         switch (Error.code(e)) {
-          case (#system_transient or #system_unknown) List.add(backlog, h);
+          case (#system_transient or #system_unknown) Queue.pushBack(backlog, h);
           case (_) {}; // canister was deleted, skip it
         };
         pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
@@ -259,44 +255,43 @@ actor class HistoryTracker() = self {
     pt_triggers.add(1);
     pt_openCalls.update(open_calls);
     Debug.print("Open calls: " # debug_show open_calls);
-    pt_backlog.update(List.size(backlog));
+    pt_backlog.update(Queue.size(backlog));
 
-    let callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
-
+    var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
-    var ctr = 0;
 
-    func addList(l : List.List<CanisterHistory.History>, start : Nat, register_cb : () -> ()) {
-      var i = start;
-      while (ctr < callsToSpawn and i < List.size(l)) {
-        let history = List.get(l, i);
-        calls.add(callItem(history, register_cb));
-        ctr += 1;
-        i += 1;
+    // process backlog first
+    label l while (callsToSpawn > 0) {
+      switch (Queue.popFront(backlog)) {
+        case (?h) {
+          calls.add(callItem(h));
+          callsToSpawn -= 1;
+        };
+        case (_) break l;
       };
     };
 
-    // process backlog first
-    addList(backlog, backlog_pos, inc_backlog_pos);
+    if (callsToSpawn > 0) {
+      let tasks : List.List<RoundRobin.RoundRobinBuffer<CanisterHistory.History>> = List.empty();
 
-    // detect the end of a round
-    if (sync_pos == List.size(history_storage)) {
-      sync_pos := 0;
-      round += 1;
-    };
-
-    if (sync_pos > 0) {
-      // continue a running round
-      addList(history_storage, sync_pos, inc_sync_pos);
-    } else {
-      // before starting a new round wait for backlog and open calls to clean
-      if (calls.size() == 0 and open_calls == 0) {
-        let now = Time.now() / 1_000_000_000;
-        // also wait for minimum round interval to pass
-        if (now >= round_start + rounds_interval) {
-          addList(history_storage, sync_pos, inc_sync_pos);
-          round_start := Int.abs(now);
+      // decide whether to execute "all_canisters" task
+      if (all_canisters.ctr() > 0) {
+        List.add(tasks, all_canisters);
+      } else {
+        if (calls.size() == 0 and open_calls == 0) {
+          let now = Time.now() / 1_000_000_000;
+          // also wait for minimum round interval to pass
+          if (now >= round_start + rounds_interval) {
+            round_start := Int.abs(now);
+            List.add(tasks, all_canisters);
+          };
         };
+      };
+
+      // TODO add other tasks to the list here
+
+      for (history in RoundRobin.roundRobinCollect(List.toArray(tasks), callsToSpawn).vals()) {
+        calls.add(callItem(history));
       };
     };
 

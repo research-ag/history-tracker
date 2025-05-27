@@ -1,0 +1,168 @@
+import Prim "mo:prim";
+
+import RoundRobin "../../src/history_be/round_robin";
+
+// ================== RoundRobinBuffer tests ==================
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should return null if empty");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  assert li.next() == null;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should return items in order");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  li.insertItem(0);
+  li.insertItem(1);
+  assert li.next() == ?0;
+  assert li.next() == ?1;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should return null when the end is reached and then continue from start");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  li.insertItem(123);
+  li.insertItem(456);
+  assert li.next() == ?123;
+  assert li.next() == ?456;
+  assert li.next() == null;
+  assert li.next() == ?123;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should continue from the same position after inserting new item");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  li.insertItem(123);
+  li.insertItem(456);
+  assert li.next() == ?123;
+  li.insertItem(789);
+  assert li.next() == ?456;
+  assert li.next() == ?789;
+  assert li.next() == null;
+  assert li.next() == ?123;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should continue from the same position after inserting new item (edge case #1)");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  li.insertItem(123);
+  li.insertItem(456);
+  assert li.next() == ?123;
+  assert li.next() == ?456;
+  li.insertItem(789);
+  assert li.next() == ?789;
+  assert li.next() == null;
+  assert li.next() == ?123;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should continue from the same position after inserting new item (edge case #2)");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  li.insertItem(123);
+  li.insertItem(456);
+  assert li.next() == ?123;
+  assert li.next() == ?456;
+  assert li.next() == null;
+  li.insertItem(789);
+  assert li.next() == ?123;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: should count remaining items");
+  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  assert li.itemsRemaining() == 0;
+  li.insertItem(123);
+  assert li.itemsRemaining() == 1;
+  li.insertItem(456);
+  assert li.itemsRemaining() == 2;
+
+  assert li.next() == ?123;
+  assert li.itemsRemaining() == 1;
+  li.insertItem(789);
+  assert li.itemsRemaining() == 2;
+
+  assert li.next() == ?456;
+  assert li.itemsRemaining() == 1;
+
+  assert li.next() == ?789;
+  assert li.itemsRemaining() == 0;
+
+  assert li.next() == null;
+  assert li.itemsRemaining() == 3;
+};
+
+// ================== roundRobinCollect tests ==================
+func bCreate(items : [Nat]) : RoundRobin.RoundRobinBuffer<Nat> {
+  let b = RoundRobin.RoundRobinBuffer<Nat>();
+  for (item in items.vals()) {
+    b.insertItem(item);
+  };
+  b;
+};
+
+do {
+  Prim.debugPrint("roundRobinCollect :: should return empty array when no buffers");
+  assert RoundRobin.roundRobinCollect<Nat>([], 100).size() == 0;
+};
+
+do {
+  Prim.debugPrint("roundRobinCollect :: should return limited amount of items");
+  let b = bCreate([0, 1, 2, 3, 4, 5, 6, 7]);
+  assert b.itemsRemaining() == 8;
+
+  let res = RoundRobin.roundRobinCollect<Nat>([b], 3);
+  assert res.size() == 3;
+  assert res == [0, 1, 2];
+  assert b.itemsRemaining() == 5;
+};
+
+do {
+  Prim.debugPrint("roundRobinCollect :: should work with regular iterables");
+  let res = RoundRobin.roundRobinCollect<Nat>([[0, 1, 2, 3, 4, 5, 6, 7].vals()], 5);
+  assert res.size() == 5;
+  assert res == [0, 1, 2, 3, 4];
+};
+
+do {
+  Prim.debugPrint("roundRobinCollect :: should return all items if not enough to fulfil full value");
+  let b = bCreate([0, 1, 2, 3]);
+  assert b.itemsRemaining() == 4;
+
+  let res = RoundRobin.roundRobinCollect<Nat>([b], 100);
+  assert res.size() == 4;
+  assert res == [0, 1, 2, 3];
+  assert b.itemsRemaining() == 4; // buffer round-robin state should be reset
+};
+
+do {
+  Prim.debugPrint("roundRobinCollect :: should handle empty buffers");
+  let res = RoundRobin.roundRobinCollect<Nat>([bCreate([]), bCreate([]), bCreate([]), bCreate([]), bCreate([])], 100);
+  assert res.size() == 0;
+};
+
+do {
+  Prim.debugPrint("roundRobinCollect :: should pick items evenly from buffers");
+
+  let buffers = [
+    bCreate([100, 101, 102, 103]),
+    bCreate([200, 201, 202]),
+    bCreate([300, 301, 302, 303, 304, 305]),
+  ];
+
+  let res0 = RoundRobin.roundRobinCollect<Nat>(buffers, 3);
+  assert res0.size() == 3;
+  assert res0 == [100, 200, 300];
+
+  let res1 = RoundRobin.roundRobinCollect<Nat>(buffers, 3);
+  assert res1.size() == 3;
+  assert res1 == [101, 201, 301];
+
+  let res2 = RoundRobin.roundRobinCollect<Nat>(buffers, 3);
+  assert res2.size() == 3;
+  assert res2 == [102, 202, 302];
+
+  // Note: 2 items got from buffer 3 because buffer 2 ended. We do not immediately get first item from buffer 2 again
+  let res3 = RoundRobin.roundRobinCollect<Nat>(buffers, 3);
+  assert res3.size() == 3;
+  assert res3 == [103, 303, 304];
+};
