@@ -31,6 +31,7 @@ import {
   parseUint8ArrayToText,
   resolveDataOrNullError,
   resolveResult,
+  resolveTrackManyResult,
 } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
@@ -128,6 +129,45 @@ export const useTrack = () => {
       },
       onError: () => {
         enqueueSnackbar("Failed to register the canister", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+export const useTrackMany = () => {
+  const { backend } = useHistoryBackend();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(
+    (canisterIds: Array<Principal>) =>
+      backend
+        .trackMany(canisterIds)
+        .then((res) => resolveTrackManyResult(res, canisterIds)),
+    {
+      onSuccess: (data) => {
+        const total = data.length;
+        const successful = data.reduce((acc, item) => acc + Number(item.ok), 0);
+
+        if (total === successful) {
+          enqueueSnackbar(`Successfully tracked ${successful} canisters`, {
+            variant: "success",
+          });
+        } else if (successful !== 0) {
+          enqueueSnackbar(
+            `Tracked ${successful} canisters, ${total - successful} failed`,
+            {
+              variant: "warning",
+            }
+          );
+        } else {
+          enqueueSnackbar(`Failed to track all ${total} canisters`, {
+            variant: "error",
+          });
+        }
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to track the canisters", {
           variant: "error",
         });
       },
