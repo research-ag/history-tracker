@@ -261,8 +261,8 @@ actor class HistoryTracker() = self {
     Debug.print("Open calls: " # debug_show open_calls);
     pt_backlog.update(List.size(backlog));
 
-    let callsToSpawn : Nat = canisters_num_to_sync - open_calls;
-    
+    let callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
+
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
     var ctr = 0;
 
