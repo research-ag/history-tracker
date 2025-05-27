@@ -288,11 +288,11 @@ actor class HistoryTracker() = self {
     } else {
       // before starting a new round wait for backlog and open calls to clean
       if (calls.size() == 0 and open_calls == 0) {
-        let now = Time.now();
+        let now = Time.now() / 1_000_000_000;
         // also wait for minimum round interval to pass
         if (now >= round_start + rounds_interval) {
           addList(history_storage, sync_pos, inc_sync_pos);
-          round_start := Int.abs(now) / 1_000_000_000;
+          round_start := Int.abs(now);
         };
       };
     };
