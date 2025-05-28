@@ -5,6 +5,7 @@ import Error "mo:base/Error";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
 import Option "mo:base/Option";
+import Prim "mo:prim";
 import Principal "mo:base/Principal";
 import Result "mo:base/Result";
 import Text "mo:base/Text";
@@ -42,12 +43,30 @@ actor class HistoryTracker() = self {
 
   var rounds_interval = 300;
 
-  /// Storage for all the canister histories.
+  /// Tasks
   stable let history_storage = List.empty<CanisterHistory.History>();
 
-  // TODO stable
+  /// Main task. Additionally serves as storage of all canisters
+  stable var all_canisters_data : RoundRobin.RoundRobinBufferData<CanisterHistory.History> = {
+    items = history_storage; //List.empty();
+    ctr = 0;
+    round = 0;
+  };
   let all_canisters : RoundRobin.RoundRobinBuffer<CanisterHistory.History> = RoundRobin.RoundRobinBuffer<CanisterHistory.History>();
-  all_canisters.items := history_storage;
+  all_canisters.unshare(all_canisters_data);
+
+  /// Task with canisters marked as prioritized
+  stable var prioritized_canisters_data : RoundRobin.RoundRobinBufferData<CanisterHistory.History> = {
+    items = List.empty();
+    ctr = 0;
+    round = 0;
+  };
+  let prioritized_canisters : RoundRobin.RoundRobinBuffer<CanisterHistory.History> = RoundRobin.RoundRobinBuffer<CanisterHistory.History>();
+  prioritized_canisters.unshare(prioritized_canisters_data);
+
+  // TODO remove in future. Now we want to start all over again each upgrade
+  all_canisters.resetProgress();
+  prioritized_canisters.resetProgress();
 
   /// Maps the canister id to the history instance index in the storage.
   stable var history_storage_map = Map.empty<Principal, Nat>();
@@ -59,7 +78,7 @@ actor class HistoryTracker() = self {
   func get_history(canister_id : Principal) : ?CanisterHistory.History {
     Option.map<Nat, CanisterHistory.History>(
       get_index(canister_id),
-      func(i) = List.get(all_canisters.items, i),
+      func(i) = all_canisters.getItem(i),
     );
   };
 
@@ -109,11 +128,16 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("uptime_seconds", "", uptime);
   ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
   ignore pt.addPullValue("backlog_size", "", func() = Queue.size(backlog));
-  ignore pt.addPullValue("tracked_canisters_total", "", func() = all_canisters.size());
-  ignore pt.addPullValue("sync_pos", "", func() = all_canisters.ctr());
   ignore pt.addPullValue("round_start", "", func() = round_start);
-  ignore pt.addPullValue("round", "", func() = all_canisters.round());
   ignore pt.addPullValue("open_calls", "", func() = open_calls);
+
+  func registerTaskMetrics(taskAlias : Text, task : RoundRobin.RoundRobinBuffer<CanisterHistory.History>) {
+    ignore pt.addPullValue("tracked_canisters_total", "task=\"" # taskAlias # "\"", func() = task.size());
+    ignore pt.addPullValue("sync_pos", "task=\"" # taskAlias # "\"", func() = task.ctr());
+    ignore pt.addPullValue("round", "task=\"" # taskAlias # "\"", func() = task.round());
+  };
+  registerTaskMetrics("all_canisters", all_canisters);
+  registerTaskMetrics("prioritized_canisters", prioritized_canisters);
 
   stable var pt_data : PT.StableData = null;
   pt.unshare(pt_data);
@@ -154,7 +178,7 @@ actor class HistoryTracker() = self {
     #ok();
   };
 
-  public func trackMany(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
+  private func trackMany_(canister_ids : [Principal]) : async* [Result.Result<(), Errors.Track>] {
     let len = canister_ids.size();
     if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
 
@@ -189,6 +213,10 @@ actor class HistoryTracker() = self {
       func(i) { trapsDetected += 1 }, // trap_cb
     );
     Array.freeze(results);
+  };
+
+  public func trackMany(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
+    await* trackMany_(canister_ids);
   };
 
   public query func canister_changes(canister_id : Principal) : async ?CanisterHistory.CanisterChangesResponse {
@@ -289,7 +317,7 @@ actor class HistoryTracker() = self {
         };
       };
 
-      // TODO add other tasks to the list here
+      List.add(tasks, prioritized_canisters);
 
       // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
 
@@ -343,7 +371,30 @@ actor class HistoryTracker() = self {
     rounds_interval := n;
   };
 
-  system func preupgrade() = pt_data := pt.share();
+  public func trackWithPriority(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
+    let trackResult = (await* trackMany_(canister_ids)) |> Array.thaw<Result.Result<(), Errors.Track>>(_);
+    for (i in trackResult.keys()) {
+      switch (trackResult[i]) {
+        case (#ok or #err(#AlreadyTracked _)) {
+          // FIXME deduplicate items!!
+          let ?h = get_history(canister_ids[i]) else Prim.trap("Can never happen!");
+          prioritized_canisters.insertItem(h);
+          trackResult[i] := #ok();
+        };
+        case (_) {};
+      };
+    };
+    Array.freeze(trackResult);
+  };
+
+  public func clearPrioritizedCanisters() : async () {
+    prioritized_canisters.unshare({ items = List.empty(); ctr = 0; round = 0 });
+  };
+
+  system func preupgrade() {
+    all_canisters_data := all_canisters.share();
+    pt_data := pt.share();
+  };
 
   public query func http_request(req : Http.Request) : async Http.Response {
     let ?path = Text.split(req.url, #char '?').next() else return Http.render400();
