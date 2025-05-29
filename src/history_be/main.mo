@@ -164,7 +164,8 @@ actor class HistoryTracker() = self {
       return #err(track_error(e));
     };
     let new_index : Nat = List.size(history_storage);
-    all_canisters_task.setSize(new_index);
+    List.add(history_storage, new_canister_history);
+    all_canisters_task.setSize(new_index + 1);
     assert insert_id(canister_id, new_index);
     #ok();
   };
@@ -189,7 +190,8 @@ actor class HistoryTracker() = self {
         process_response = func(info) {
           CanisterHistory.API(new_canister_history).sync_call_process_response(info);
           let new_index : Nat = List.size(history_storage);
-          all_canisters_task.setSize(new_index);
+          List.add(history_storage, new_canister_history);
+          all_canisters_task.setSize(new_index + 1);
           assert insert_id(id, new_index);
         };
         process_error = func(e) {
