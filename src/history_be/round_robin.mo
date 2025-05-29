@@ -40,9 +40,10 @@ module {
         let item = List.get(items_, ctr_);
         ctr_ += 1;
         return ?item;
+      } else if (ctr_ > 0) {
+        round_ += 1;
+        ctr_ := 0;
       };
-      ctr_ := 0;
-      round_ += 1;
       return null;
     };
 
@@ -101,9 +102,10 @@ module {
         let item = ctr_;
         ctr_ += 1;
         return ?item;
+      } else if (ctr_ > 0) {
+        round_ += 1;
+        ctr_ := 0;
       };
-      ctr_ := 0;
-      round_ += 1;
       return null;
     };
 
