@@ -1,7 +1,18 @@
 import Iter "mo:new-base/Iter";
 import List "mo:new-base/List";
+import Option "mo:new-base/Option";
 
 module {
+
+  // interface
+  public type RoundRobinSource<T> = {
+    ctr : () -> Nat;
+    round : () -> Nat;
+    size : () -> Nat;
+    itemsRemaining : () -> Nat;
+    next : () -> ?T;
+    resetProgress : () -> ();
+  };
 
   public type RoundRobinBufferData<T> = {
     items : List.List<T>;
@@ -11,7 +22,8 @@ module {
 
   // A storage with ability to loop over elements, preserving cursor. After running out of items, emits null once and starts from the beginning
   // Compatible with Iter.Iter<T> ({ next : () -> ?T })
-  public class RoundRobinBuffer<T>() {
+  public class RoundRobinBuffer<T>() = {
+
     var ctr_ : Nat = 0;
     var round_ : Nat = 0;
     var items_ : List.List<T> = List.empty();
@@ -42,6 +54,10 @@ module {
       List.add(items_, item);
     };
 
+    public func hasItem(item : T, equal : (T, T) -> Bool) : Bool {
+      not Option.isNull(List.indexOf(items_, equal, item));
+    };
+
     public func resetProgress() {
       round_ := 0;
       ctr_ := 0;
@@ -55,6 +71,54 @@ module {
 
     public func unshare(data : RoundRobinBufferData<T>) {
       items_ := data.items;
+      ctr_ := data.ctr;
+      round_ := data.round;
+    };
+  };
+
+  public type RoundRobinGeneratorData = {
+    size : Nat;
+    ctr : Nat;
+    round : Nat;
+  };
+
+  public class RoundRobinNatGenerator() {
+    var ctr_ : Nat = 0;
+    var round_ : Nat = 0;
+    var size_ : Nat = 0;
+
+    public func ctr() : Nat = ctr_;
+    public func round() : Nat = round_;
+
+    public func size() : Nat = size_;
+    public func setSize(v : Nat) = size_ := v;
+
+    public func itemsRemaining() : Nat = size_ - ctr_;
+
+    public func next() : ?Nat {
+      if (ctr_ < size_) {
+        let item = ctr_;
+        ctr_ += 1;
+        return ?item;
+      };
+      ctr_ := 0;
+      round_ += 1;
+      return null;
+    };
+
+    public func resetProgress() {
+      round_ := 0;
+      ctr_ := 0;
+    };
+
+    public func share() : RoundRobinGeneratorData = {
+      size = size_;
+      ctr = ctr_;
+      round = round_;
+    };
+
+    public func unshare(data : RoundRobinGeneratorData) {
+      size_ := data.size;
       ctr_ := data.ctr;
       round_ := data.round;
     };

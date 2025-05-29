@@ -2,6 +2,12 @@ import Prim "mo:prim";
 
 import RoundRobin "../../src/history_be/round_robin";
 
+// RoundRobinBuffer should be a subtype of RoundRobinSource
+let _ : RoundRobin.RoundRobinSource<Float> = RoundRobin.RoundRobinBuffer<Float>();
+
+// RoundRobinNatGenerator should be a subtype of RoundRobinSource<Nat>
+let _ : RoundRobin.RoundRobinSource<Nat> = RoundRobin.RoundRobinNatGenerator();
+
 // ================== RoundRobinBuffer tests ==================
 do {
   Prim.debugPrint("RoundRobinBuffer :: should return null if empty");
@@ -89,6 +95,72 @@ do {
 
   assert li.next() == null;
   assert li.itemsRemaining() == 3;
+};
+
+// ================== RoundRobinNatGenerator tests ==================
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: should return null if empty");
+  let li = RoundRobin.RoundRobinNatGenerator();
+  assert li.next() == null;
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: should return null when the end is reached and then continue from start");
+  let li = RoundRobin.RoundRobinNatGenerator();
+  li.setSize(2);
+  assert li.next() == ?0;
+  assert li.next() == ?1;
+  assert li.next() == null;
+  assert li.next() == ?0;
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: should continue from the same position after increasing size");
+  let li = RoundRobin.RoundRobinNatGenerator();
+  li.setSize(2);
+  assert li.next() == ?0;
+  li.setSize(3);
+  assert li.next() == ?1;
+  assert li.next() == ?2;
+  assert li.next() == null;
+  assert li.next() == ?0;
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: should count remaining items");
+  let li = RoundRobin.RoundRobinNatGenerator();
+  assert li.itemsRemaining() == 0;
+  li.setSize(li.size() + 1);
+  assert li.itemsRemaining() == 1;
+  li.setSize(li.size() + 1);
+  assert li.itemsRemaining() == 2;
+
+  assert li.next() == ?0;
+  assert li.itemsRemaining() == 1;
+  li.setSize(li.size() + 1);
+  assert li.itemsRemaining() == 2;
+
+  assert li.next() == ?1;
+  assert li.itemsRemaining() == 1;
+
+  assert li.next() == ?2;
+  assert li.itemsRemaining() == 0;
+
+  assert li.next() == null;
+  assert li.itemsRemaining() == 3;
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: should handle decreased size");
+  let li = RoundRobin.RoundRobinNatGenerator();
+  li.setSize(4);
+  assert li.next() == ?0;
+  assert li.next() == ?1;
+  assert li.next() == ?2;
+  li.setSize(1);
+  assert li.next() == null;
+  assert li.next() == ?0;
+  assert li.next() == null;
 };
 
 // ================== roundRobinCollect tests ==================
