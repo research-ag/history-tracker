@@ -21,11 +21,12 @@ const StatsBlock = () => {
   const { data: lastRoundDetails, isLoading: isLastRoundDetailsLoading } =
     useGetLastRoundDetails();
 
-  const formattedTrackedCanistersTotal = trackedCanistersTotal
-    ? trackedCanistersTotal.toString()
-    : isTrackedCanistersTotalLoading
-    ? "Loading..."
-    : "N/A";
+  const formattedTrackedCanistersTotal =
+    typeof trackedCanistersTotal === "bigint"
+      ? trackedCanistersTotal.toString()
+      : isTrackedCanistersTotalLoading
+      ? "Loading..."
+      : "N/A";
 
   const formattedNewIn24h = trackingStats
     ? `+${trackingStats.new_24h.toString()}`
