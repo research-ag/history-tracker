@@ -3,7 +3,9 @@ import Buffer "mo:base/Buffer";
 import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
+import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
+import Nat64 "mo:base/Nat64";
 import Option "mo:base/Option";
 import Prim "mo:prim";
 import Principal "mo:base/Principal";
@@ -38,18 +40,31 @@ actor class HistoryTracker() = self {
     };
   };
 
+  module Task {
+    public type TaskDescr = {
+      alias : Text;
+      dataSource : RoundRobin.RoundRobinSource<Nat>;
+      var roundsInterval : Nat64;
+      var roundStart : Nat64;
+    };
+  };
+
   /// Number of canisters that are synchronized per iteration.
   var canisters_num_to_sync = 100;
-
-  var rounds_interval = 300;
 
   stable let history_storage = List.empty<CanisterHistory.History>();
   /// Maps the canister id to the history instance index in the storage.
   stable var history_storage_map = Map.empty<Principal, Nat>();
 
   /// Main task which loops over all of the canisters
-  let all_canisters_task : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator();
-  all_canisters_task.setSize(List.size(history_storage));
+  let allCanistersTaskDataSource : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator();
+  let allCanistersTask : Task.TaskDescr = {
+    alias = "all_canisters";
+    dataSource = allCanistersTaskDataSource;
+    var roundsInterval = 300;
+    var roundStart = 0;
+  };
+  allCanistersTaskDataSource.setSize(List.size(history_storage));
 
   /// Task with canisters marked as prioritized
   stable var prioritized_canisters_task_data : RoundRobin.RoundRobinBufferData<Nat> = {
@@ -57,10 +72,14 @@ actor class HistoryTracker() = self {
     ctr = 0;
     round = 0;
   };
-  let prioritized_canisters_task : RoundRobin.RoundRobinBuffer<Nat> = RoundRobin.RoundRobinBuffer<Nat>();
-  prioritized_canisters_task.unshare(prioritized_canisters_task_data);
-  // TODO remove in future. Now we want to start all over again each upgrade
-  prioritized_canisters_task.resetProgress();
+  let prioritizedCanistersTaskDataSource : RoundRobin.RoundRobinBuffer<Nat> = RoundRobin.RoundRobinBuffer<Nat>();
+  prioritizedCanistersTaskDataSource.unshare(prioritized_canisters_task_data);
+  let prioritizedCanistersTask : Task.TaskDescr = {
+    alias = "prioritized_canisters";
+    dataSource = prioritizedCanistersTaskDataSource;
+    var roundsInterval = 300;
+    var roundStart = 0;
+  };
 
   func get_index(canister_id : Principal) : ?Nat {
     Map.get<Principal, Nat>(history_storage_map, Principal.compare, canister_id);
@@ -92,7 +111,7 @@ actor class HistoryTracker() = self {
   // During the testing phase we don't declare these stable
   // Resetting them to 0 makes it easier to interpret Grafana
   var trapsDetected = 0;
-  var round_start = 0;
+
   let backlog = Queue.empty<CanisterHistory.History>();
 
   // PromTracker
@@ -114,21 +133,21 @@ actor class HistoryTracker() = self {
   let pt_trigger_interval = pt.addCounter("trigger_interval", "", false);
   // pull values constants
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
-  ignore pt.addPullValue("rounds_interval", "", func() = rounds_interval);
   // pull values variables
   ignore pt.addPullValue("uptime_seconds", "", uptime);
   ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
   ignore pt.addPullValue("backlog_size", "", func() = Queue.size(backlog));
-  ignore pt.addPullValue("round_start", "", func() = round_start);
   ignore pt.addPullValue("open_calls", "", func() = open_calls);
 
-  func registerTaskMetrics(taskAlias : Text, task : RoundRobin.RoundRobinSource<Nat>) {
-    ignore pt.addPullValue("tracked_canisters_total", "task=\"" # taskAlias # "\"", func() = task.size());
-    ignore pt.addPullValue("sync_pos", "task=\"" # taskAlias # "\"", func() = task.ctr());
-    ignore pt.addPullValue("round", "task=\"" # taskAlias # "\"", func() = task.round());
+  func registerTaskMetrics(task : Task.TaskDescr) {
+    ignore pt.addPullValue("tracked_canisters_total", "task=\"" # task.alias # "\"", func() = task.dataSource.size());
+    ignore pt.addPullValue("sync_pos", "task=\"" # task.alias # "\"", func() = task.dataSource.ctr());
+    ignore pt.addPullValue("round", "task=\"" # task.alias # "\"", func() = task.dataSource.round());
+    ignore pt.addPullValue("round_start", "task=\"" # task.alias # "\"", func() = task.roundStart |> Nat64.toNat(_));
+    ignore pt.addPullValue("rounds_interval", "task=\"" # task.alias # "\"", func() = task.roundsInterval |> Nat64.toNat(_));
   };
-  registerTaskMetrics("all_canisters", all_canisters_task);
-  registerTaskMetrics("prioritized_canisters", prioritized_canisters_task);
+  registerTaskMetrics(allCanistersTask);
+  registerTaskMetrics(prioritizedCanistersTask);
 
   stable var pt_data : PT.StableData = null;
   pt.unshare(pt_data);
@@ -165,7 +184,7 @@ actor class HistoryTracker() = self {
     };
     let new_index : Nat = List.size(history_storage);
     List.add(history_storage, new_canister_history);
-    all_canisters_task.setSize(new_index + 1);
+    allCanistersTaskDataSource.setSize(new_index + 1);
     assert insert_id(canister_id, new_index);
     #ok();
   };
@@ -191,7 +210,7 @@ actor class HistoryTracker() = self {
           CanisterHistory.API(new_canister_history).sync_call_process_response(info);
           let new_index : Nat = List.size(history_storage);
           List.add(history_storage, new_canister_history);
-          all_canisters_task.setSize(new_index + 1);
+          allCanistersTaskDataSource.setSize(new_index + 1);
           assert insert_id(id, new_index);
         };
         process_error = func(e) {
@@ -273,6 +292,7 @@ actor class HistoryTracker() = self {
     Debug.print("Open calls: " # debug_show open_calls);
     pt_backlog.update(Queue.size(backlog));
 
+    let now = Prim.time() / 1_000_000_000;
     var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
 
     // process backlog first
@@ -287,26 +307,30 @@ actor class HistoryTracker() = self {
     };
 
     if (callsToSpawn > 0) {
-      let tasks : List.List<RoundRobin.RoundRobinSource<Nat>> = List.empty();
+      var tasks : List.List<Task.TaskDescr> = List.empty();
 
-      // decide whether to execute "all_canisters" task
-      if (all_canisters_task.ctr() > 0) {
-        List.add(tasks, all_canisters_task);
-      } else if (open_calls == 0) {
-        let now = Time.now() / 1_000_000_000;
-        // also wait for minimum round interval to pass
-        if (now >= round_start + rounds_interval) {
-          round_start := Int.abs(now);
-          List.add(tasks, all_canisters_task);
-        };
+      List.add(tasks, allCanistersTask);
+      List.add(tasks, prioritizedCanistersTask);
+      // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
+      tasks := List.filter<Task.TaskDescr>(tasks, func(t) = now >= t.roundStart + t.roundsInterval);
+
+      // compile a list of tasks that about to start a new round
+      let roundStartCandidates : List.List<(Task.TaskDescr, lastRound : Nat)> = tasks
+      |> List.filter<Task.TaskDescr>(_, func(t) = t.dataSource.ctr() == 0 and t.dataSource.itemsRemaining() > 0)
+      |> List.map<Task.TaskDescr, (Task.TaskDescr, Nat)>(_, func(t) = (t, t.dataSource.round()));
+
+      let dataSources : [Iter.Iter<Nat>] = tasks
+      |> List.map<Task.TaskDescr, Iter.Iter<Nat>>(_, func(t) = t.dataSource)
+      |> List.toArray(_);
+
+      for (index in RoundRobin.roundRobinCollect(dataSources, callsToSpawn, ?Nat.equal).vals()) {
+        ignore callItem(List.get(history_storage, index));
       };
 
-      List.add(tasks, prioritized_canisters_task);
-
-      // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
-
-      for (index in RoundRobin.roundRobinCollect(List.toArray(tasks), callsToSpawn, ?Nat.equal).vals()) {
-        ignore callItem(List.get(history_storage, index));
+      for ((t, lastRound) in List.values(roundStartCandidates)) {
+        if (t.dataSource.round() != lastRound or t.dataSource.ctr() > 0) {
+          t.roundStart := now;
+        };
       };
     };
   };
@@ -347,7 +371,8 @@ actor class HistoryTracker() = self {
   };
 
   public func setRoundsInterval(n : Nat) {
-    rounds_interval := n;
+    allCanistersTask.roundsInterval := Nat64.fromNat(n);
+    prioritizedCanistersTask.roundsInterval := Nat64.fromNat(n);
   };
 
   public func trackWithPriority(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
@@ -356,10 +381,10 @@ actor class HistoryTracker() = self {
       switch (trackResult[i]) {
         case (#ok or #err(#AlreadyTracked _)) {
           let ?idx = get_index(canister_ids[i]) else Prim.trap("Can never happen!");
-          if (prioritized_canisters_task.hasItem(idx, Nat.equal)) {
+          if (prioritizedCanistersTaskDataSource.hasItem(idx, Nat.equal)) {
             trackResult[i] := #err(#AlreadyTracked({ message = "Already tracked with priority" }));
           } else {
-            prioritized_canisters_task.insertItem(idx);
+            prioritizedCanistersTaskDataSource.insertItem(idx);
             trackResult[i] := #ok();
           };
         };
@@ -370,16 +395,14 @@ actor class HistoryTracker() = self {
   };
 
   public func clearPrioritizedCanisters() : async () {
-    prioritized_canisters_task.unshare({
+    prioritizedCanistersTaskDataSource.unshare({
       items = List.empty();
       ctr = 0;
       round = 0;
     });
   };
 
-  system func preupgrade() {
-    pt_data := pt.share();
-  };
+  system func preupgrade() = pt_data := pt.share();
 
   public query func http_request(req : Http.Request) : async Http.Response {
     let ?path = Text.split(req.url, #char '?').next() else return Http.render400();
