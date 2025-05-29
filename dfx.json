@@ -20,7 +20,8 @@
           "ts"
         ],
         "output": "./declarations/history_be"
-      }
+      },
+      "args" : "--enhanced-orthogonal-persistence"
     },
     "history_fe": {
       "type": "assets",
