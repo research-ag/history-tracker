@@ -82,6 +82,7 @@ module {
     round : Nat;
   };
 
+  // Works like RoundRobinBuffer<Nat>, but produces consecutive nat-s from 0 to size_ - 1
   public class RoundRobinNatGenerator() {
     var ctr_ : Nat = 0;
     var round_ : Nat = 0;

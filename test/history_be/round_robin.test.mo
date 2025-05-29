@@ -1,13 +1,16 @@
+import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Prim "mo:prim";
 
 import RoundRobin "../../src/history_be/round_robin";
 
-// RoundRobinBuffer should be a subtype of RoundRobinSource
+// RoundRobinBuffer<T> has to be a subtype of RoundRobinSource<T> and Iter<T>
 let _ : RoundRobin.RoundRobinSource<Float> = RoundRobin.RoundRobinBuffer<Float>();
+let _ : Iter.Iter<Float> = RoundRobin.RoundRobinBuffer<Float>();
 
-// RoundRobinNatGenerator should be a subtype of RoundRobinSource<Nat>
+// RoundRobinNatGenerator has to be a subtype of RoundRobinSource<Nat> and Iter<Nat>
 let _ : RoundRobin.RoundRobinSource<Nat> = RoundRobin.RoundRobinNatGenerator();
+let _ : Iter.Iter<Nat> = RoundRobin.RoundRobinNatGenerator();
 
 // ================== RoundRobinBuffer tests ==================
 do {
