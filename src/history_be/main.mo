@@ -312,7 +312,10 @@ actor class HistoryTracker() = self {
       List.add(tasks, allCanistersTask);
       List.add(tasks, prioritizedCanistersTask);
       // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
-      tasks := List.filter<Task.TaskDescr>(tasks, func(t) = now >= t.roundStart + t.roundsInterval);
+      tasks := List.filter<Task.TaskDescr>(
+        tasks,
+        func(t) = t.dataSource.ctr() > 0 or now >= t.roundStart + t.roundsInterval,
+      );
 
       // compile a list of tasks that about to start a new round
       let roundStartCandidates : List.List<(Task.TaskDescr, lastRound : Nat)> = tasks
