@@ -236,7 +236,6 @@ actor class HistoryTracker() = self {
     open_calls += 1;
     try {
       let info = await* CanisterHistory.API(h).sync();
-      CanisterHistory.API(h).sync_call_process_response(info);
       pt_changesPerSync.update(info.recent_changes.size());
       pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
     } catch (e) {
