@@ -255,28 +255,22 @@ actor class HistoryTracker() = self {
     };
   };
 
-  func callItem(h : CanisterHistory.History) : Concurrent.Item {
+  func callItem(h : CanisterHistory.History) : async () {
     let start_time = Time.now();
-    {
-      call_arg = CanisterHistory.API(h).sync_call_arg();
-      register_call = func() {
-        pt_syncAttempts.add(1);
-        open_calls += 1;
+    pt_syncAttempts.add(1);
+    open_calls += 1;
+    try {
+      let info = await* CanisterHistory.API(h).sync();
+      pt_changesPerSync.update(info.recent_changes.size());
+      pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+    } catch (e) {
+      switch (Error.code(e)) {
+        case (#system_transient or #system_unknown) Queue.pushBack(backlog, h);
+        case (_) {}; // canister was deleted, skip it
       };
-      process_response = func(info) {
-        CanisterHistory.API(h).sync_call_process_response(info);
-        pt_changesPerSync.update(info.recent_changes.size());
-        pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
-        open_calls -= 1;
-      };
-      process_error = func(e) {
-        switch (Error.code(e)) {
-          case (#system_transient or #system_unknown) Queue.pushBack(backlog, h);
-          case (_) {}; // canister was deleted, skip it
-        };
-        pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
-        open_calls -= 1;
-      };
+      pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+    } finally {
+      open_calls -= 1;
     };
   };
 
@@ -287,13 +281,12 @@ actor class HistoryTracker() = self {
     pt_backlog.update(Queue.size(backlog));
 
     var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
-    let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
 
     // process backlog first
     label l while (callsToSpawn > 0) {
       switch (Queue.popFront(backlog)) {
         case (?h) {
-          calls.add(callItem(h));
+          ignore callItem(h);
           callsToSpawn -= 1;
         };
         case (_) break l;
@@ -306,14 +299,12 @@ actor class HistoryTracker() = self {
       // decide whether to execute "all_canisters" task
       if (all_canisters.ctr() > 0) {
         List.add(tasks, all_canisters);
-      } else {
-        if (calls.size() == 0 and open_calls == 0) {
-          let now = Time.now() / 1_000_000_000;
-          // also wait for minimum round interval to pass
-          if (now >= round_start + rounds_interval) {
-            round_start := Int.abs(now);
-            List.add(tasks, all_canisters);
-          };
+      } else if (open_calls == 0) {
+        let now = Time.now() / 1_000_000_000;
+        // also wait for minimum round interval to pass
+        if (now >= round_start + rounds_interval) {
+          round_start := Int.abs(now);
+          List.add(tasks, all_canisters);
         };
       };
 
@@ -322,14 +313,9 @@ actor class HistoryTracker() = self {
       // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
 
       for (history in RoundRobin.roundRobinCollect(List.toArray(tasks), callsToSpawn).vals()) {
-        calls.add(callItem(history));
+        ignore callItem(history);
       };
     };
-
-    await* Concurrent.make_calls(
-      Buffer.toArray(calls),
-      func(i) { trapsDetected += 1 }, // trap_cb
-    );
   };
 
   var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
