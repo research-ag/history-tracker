@@ -124,7 +124,7 @@ module {
     };
   };
 
-  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat) : [T] {
+  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat, deduplicationEqual : ?((T, T) -> Bool)) : [T] {
     if (sources.size() == 0) return [];
 
     var sourcesToUse : List.List<Iter.Iter<T>> = List.fromArray(sources);
@@ -136,7 +136,12 @@ module {
         switch (b.next()) {
           case (?item) {
             List.add(nextLoopSources, b);
-            List.add(ret, item);
+            switch (deduplicationEqual) {
+              case (null) List.add(ret, item);
+              case (?eq) if (Option.isNull(List.indexOf(ret, eq, item))) {
+                List.add(ret, item);
+              };
+            };
             if (List.size(ret) == amount) break l;
           };
           case (_) {};
