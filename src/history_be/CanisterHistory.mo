@@ -65,11 +65,11 @@ module {
   let ic = actor "aaaaa-aa" : IC.Management;
   public class API(state : History) {
 
-    public func sync() : async* Bool {
+    public func sync() : async* IC.CanisterInfoResponse {
       // no try-catch => async errors are passed through to the caller
       let info = await ic.canister_info(sync_call_arg());
       sync_call_process_response(info);
-      true;
+      info;
     };
 
     public func sync_call_arg() : IC.CanisterInfoRequest = {
