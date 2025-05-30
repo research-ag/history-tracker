@@ -368,14 +368,16 @@ actor class HistoryTracker() = self {
   // ADMIN API
   public func startTriggerTimer(intervalSeconds : Nat) : async () {
     switch (triggerTimer) {
-      case (null) {
-        triggerTimer := ?Timer.recurringTimer<system>(
-          #seconds intervalSeconds,
-          func() : async () { await* trigger_sync() },
-        );
+      case (?t) {
+        Timer.cancelTimer(t);
+        triggerTimer := null;
       };
-      case (_) {};
+      case (null) {};
     };
+    triggerTimer := ?Timer.recurringTimer<system>(
+      #seconds intervalSeconds,
+      func() : async () { await* trigger_sync() },
+    );
     pt_trigger_interval.set(intervalSeconds);
   };
 
