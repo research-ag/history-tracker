@@ -5,23 +5,23 @@ import Prim "mo:prim";
 import RoundRobin "../../src/history_be/round_robin";
 
 // RoundRobinBuffer<T> has to be a subtype of RoundRobinSource<T> and Iter<T>
-let _ : RoundRobin.RoundRobinSource<Float> = RoundRobin.RoundRobinBuffer<Float>();
-let _ : Iter.Iter<Float> = RoundRobin.RoundRobinBuffer<Float>();
+let _ : RoundRobin.RoundRobinSource<Float> = RoundRobin.RoundRobinBuffer<Float>(null);
+let _ : Iter.Iter<Float> = RoundRobin.RoundRobinBuffer<Float>(null);
 
 // RoundRobinNatGenerator has to be a subtype of RoundRobinSource<Nat> and Iter<Nat>
-let _ : RoundRobin.RoundRobinSource<Nat> = RoundRobin.RoundRobinNatGenerator();
-let _ : Iter.Iter<Nat> = RoundRobin.RoundRobinNatGenerator();
+let _ : RoundRobin.RoundRobinSource<Nat> = RoundRobin.RoundRobinNatGenerator(null);
+let _ : Iter.Iter<Nat> = RoundRobin.RoundRobinNatGenerator(null);
 
 // ================== RoundRobinBuffer tests ==================
 do {
   Prim.debugPrint("RoundRobinBuffer :: should return null if empty");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   assert li.next() == null;
 };
 
 do {
   Prim.debugPrint("RoundRobinBuffer :: should return items in order");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   li.insertItem(0);
   li.insertItem(1);
   assert li.next() == ?0;
@@ -30,7 +30,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinBuffer :: should return null when the end is reached and then continue from start");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   li.insertItem(123);
   li.insertItem(456);
   assert li.next() == ?123;
@@ -41,7 +41,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinBuffer :: should continue from the same position after inserting new item");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   li.insertItem(123);
   li.insertItem(456);
   assert li.next() == ?123;
@@ -54,7 +54,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinBuffer :: should continue from the same position after inserting new item (edge case #1)");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   li.insertItem(123);
   li.insertItem(456);
   assert li.next() == ?123;
@@ -67,7 +67,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinBuffer :: should continue from the same position after inserting new item (edge case #2)");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   li.insertItem(123);
   li.insertItem(456);
   assert li.next() == ?123;
@@ -79,7 +79,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinBuffer :: should count remaining items");
-  let li = RoundRobin.RoundRobinBuffer<Nat>();
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   assert li.itemsRemaining() == 0;
   li.insertItem(123);
   assert li.itemsRemaining() == 1;
@@ -104,13 +104,13 @@ do {
 // ================== RoundRobinNatGenerator tests ==================
 do {
   Prim.debugPrint("RoundRobinNatGenerator :: should return null if empty");
-  let li = RoundRobin.RoundRobinNatGenerator();
+  let li = RoundRobin.RoundRobinNatGenerator(null);
   assert li.next() == null;
 };
 
 do {
   Prim.debugPrint("RoundRobinNatGenerator :: should return null when the end is reached and then continue from start");
-  let li = RoundRobin.RoundRobinNatGenerator();
+  let li = RoundRobin.RoundRobinNatGenerator(null);
   li.setSize(2);
   assert li.next() == ?0;
   assert li.next() == ?1;
@@ -120,7 +120,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinNatGenerator :: should continue from the same position after increasing size");
-  let li = RoundRobin.RoundRobinNatGenerator();
+  let li = RoundRobin.RoundRobinNatGenerator(null);
   li.setSize(2);
   assert li.next() == ?0;
   li.setSize(3);
@@ -132,7 +132,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinNatGenerator :: should count remaining items");
-  let li = RoundRobin.RoundRobinNatGenerator();
+  let li = RoundRobin.RoundRobinNatGenerator(null);
   assert li.itemsRemaining() == 0;
   li.setSize(li.size() + 1);
   assert li.itemsRemaining() == 1;
@@ -156,7 +156,7 @@ do {
 
 do {
   Prim.debugPrint("RoundRobinNatGenerator :: should handle decreased size");
-  let li = RoundRobin.RoundRobinNatGenerator();
+  let li = RoundRobin.RoundRobinNatGenerator(null);
   li.setSize(4);
   assert li.next() == ?0;
   assert li.next() == ?1;
@@ -169,7 +169,7 @@ do {
 
 // ================== roundRobinCollect tests ==================
 func bCreate(items : [Nat]) : RoundRobin.RoundRobinBuffer<Nat> {
-  let b = RoundRobin.RoundRobinBuffer<Nat>();
+  let b = RoundRobin.RoundRobinBuffer<Nat>(null);
   for (item in items.vals()) {
     b.insertItem(item);
   };

@@ -22,7 +22,7 @@ module {
 
   // A storage with ability to loop over elements, preserving cursor. After running out of items, emits null once and starts from the beginning
   // Compatible with Iter.Iter<T> ({ next : () -> ?T })
-  public class RoundRobinBuffer<T>() = {
+  public class RoundRobinBuffer<T>(data : ?RoundRobinBufferData<T>) = {
 
     var ctr_ : Nat = 0;
     var round_ : Nat = 0;
@@ -75,6 +75,11 @@ module {
       ctr_ := data.ctr;
       round_ := data.round;
     };
+
+    switch (data) {
+      case (?d) unshare(d);
+      case (_) {};
+    };
   };
 
   public type RoundRobinGeneratorData = {
@@ -84,7 +89,7 @@ module {
   };
 
   // Works like RoundRobinBuffer<Nat>, but produces consecutive nat-s from 0 to size_ - 1
-  public class RoundRobinNatGenerator() {
+  public class RoundRobinNatGenerator(data : ?RoundRobinGeneratorData) {
     var ctr_ : Nat = 0;
     var round_ : Nat = 0;
     var size_ : Nat = 0;
@@ -124,6 +129,11 @@ module {
       size_ := data.size;
       ctr_ := data.ctr;
       round_ := data.round;
+    };
+
+    switch (data) {
+      case (?d) unshare(d);
+      case (_) {};
     };
   };
 
