@@ -1,6 +1,6 @@
 [dependencies]
 base = "0.14.9"
-vector = "0.4.0"
+new-base = "0.4.0"
 promtracker = "0.5.4"
 
 [dev-dependencies]

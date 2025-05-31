@@ -27,7 +27,7 @@ module {
         // stop scheduling more calls
       };
     };
-    await async {}; // commit point, send the calls
+    // the calls will all get sent with the first await below
     // now process the responses
     var i = 0;
     while (i < futures.size()) {
