@@ -295,13 +295,6 @@ actor class HistoryTracker() = self {
     );
   };
 
-  public query func canister_state(canister_id : Principal) : async ?CanisterHistory.CanisterStateResponse {
-    Option.map<CanisterHistory.History, CanisterHistory.CanisterStateResponse>(
-      get_history(canister_id),
-      func(h) = CanisterHistory.API(h).canister_state(),
-    );
-  };
-
   public query func metadata(canister_id : Principal) : async ?CanisterHistory.Metadata {
     Option.map<CanisterHistory.History, CanisterHistory.Metadata>(
       get_history(canister_id),
