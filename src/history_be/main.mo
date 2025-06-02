@@ -318,9 +318,15 @@ actor class HistoryTracker() = self {
 
     // process backlog first
     label l while (callsToSpawn > 0) {
-      switch (Queue.popFront(backlog)) {
+      switch (Queue.peekFront(backlog)) {
         case (?h) {
-          ignore callItem(h);
+          try {
+            ignore callItem(h);
+          } catch (err) {
+            Debug.print("Error while making self call for backlog entry: " # Error.message(err));
+            return;
+          };
+          ignore Queue.popFront(backlog);
           callsToSpawn -= 1;
         };
         case (_) break l;
