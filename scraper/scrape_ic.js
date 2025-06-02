@@ -8,7 +8,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const API_BASE_URL = 'https://ic-api.internetcomputer.org/api/v3/canisters';
-const OUTPUT_FILE = path.join(__dirname, 'canister_ids.txt');
+const ID_OUTPUT_FILE = path.join(__dirname, 'canister_ids.txt');
+const SUB_OUTPUT_FILE = path.join(__dirname, 'subnet_ids.txt');
 const BATCH_SIZE = 100;
 
 const args = process.argv.slice(2);
@@ -52,11 +53,12 @@ function fetchCanisters(limit, offset) {
 async function scrapeCanisterIds() {
   let hasMore = true;
   let currentSkip = skip;
-  let canisterIds = [];
+  let canisterIdsLen = 0;
 
   if (currentSkip === 0) {
-    fs.writeFileSync(OUTPUT_FILE, '');
-    console.log(`Created empty file: ${OUTPUT_FILE}`);
+    fs.writeFileSync(ID_OUTPUT_FILE, '');
+    fs.writeFileSync(SUB_OUTPUT_FILE, '');
+    console.log(`Created empty output files`);
   }
   console.log('Starting to scrape canister IDs...');
   while (hasMore) {
@@ -73,10 +75,11 @@ async function scrapeCanisterIds() {
         console.log('No more canisters to fetch.');
         break;
       }
-      const batchIds = batch.map(item => item.canister_id).filter(Boolean);
+      const batchIds = batch.map(item => [item.canister_id, item.subnet_id]).filter(([a, b]) => !!a && !!b);
       if (batchIds.length > 0) {
-        fs.appendFileSync(OUTPUT_FILE, batchIds.join('\n') + '\n');
-        canisterIds = canisterIds.concat(batchIds);
+        fs.appendFileSync(ID_OUTPUT_FILE, batchIds.map(([x, _]) => x).join('\n') + '\n');
+        fs.appendFileSync(SUB_OUTPUT_FILE, batchIds.map(([_, x]) => x).join('\n') + '\n');
+        canisterIdsLen += batchIds.length;
       }
       currentSkip += batch.length;
     } catch (error) {
@@ -85,7 +88,7 @@ async function scrapeCanisterIds() {
     }
   }
 
-  console.log(`Scraping completed. Total canister IDs collected: ${canisterIds.length}`);
+  console.log(`Scraping completed. Total canister IDs collected: ${canisterIdsLen}`);
 }
 
 // Run the scraper
