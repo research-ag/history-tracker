@@ -354,12 +354,14 @@ actor class HistoryTracker() = self {
       |> List.toArray(_);
 
       let canistersToCall = RoundRobin.roundRobinCollect(dataSources, callsToSpawn, ?Nat.equal);
-      label l for (idx in canistersToCall) {
+      label l for ((sourceIdx, canisterIdx) in canistersToCall) {
         try {
-          ignore callItem(List.get(history_storage, idx));
+          ignore callItem(List.get(history_storage, canisterIdx));
         } catch (err) {
           Debug.print("Error while making self call: " # Error.message(err));
-          Queue.pushBack(backlog, List.get(history_storage, idx));
+          // revert ctr increment in the data source
+          let task = List.get(tasksToRun, sourceIdx);
+          task.dataSource.decCtr();
           break l;
         };
       };

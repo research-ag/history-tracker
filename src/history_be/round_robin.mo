@@ -8,6 +8,7 @@ module {
   // interface
   public type RoundRobinSource<T> = {
     ctr : () -> Nat;
+    decCtr : () -> ();
     round : () -> Nat;
     size : () -> Nat;
     itemsRemaining : () -> Nat;
@@ -30,6 +31,13 @@ module {
     var items_ : List.List<T> = List.empty();
 
     public func ctr() : Nat = ctr_;
+    public func decCtr() {
+      if (ctr_ > 0) {
+        ctr_ -= 1;
+      } else {
+        ctr_ := List.size(items_) - 1;
+      };
+    };
     public func round() : Nat = round_;
 
     public func size() : Nat = List.size(items_);
@@ -96,6 +104,13 @@ module {
     var size_ : Nat = 0;
 
     public func ctr() : Nat = ctr_;
+    public func decCtr() {
+      if (ctr_ > 0) {
+        ctr_ -= 1;
+      } else {
+        ctr_ := size_ - 1;
+      };
+    };
     public func round() : Nat = round_;
 
     public func size() : Nat = size_;
@@ -138,23 +153,26 @@ module {
     };
   };
 
-  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat, deduplicationEqual : ?((T, T) -> Bool)) : Iter.Iter<T> {
+  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat, deduplicationEqual : ?((T, T) -> Bool)) : Iter.Iter<(Nat, T)> {
     if (sources.size() == 0) return Iter.empty();
 
-    var sourcesToUse : Queue.Queue<Iter.Iter<T>> = Queue.fromIter(sources.vals());
+    var sourcesToUse : Queue.Queue<(Nat, Iter.Iter<T>)> = sources.keys()
+    |> Iter.map<Nat, (Nat, Iter.Iter<T>)>(_, func(i) = (i, sources[i]))
+    |> Queue.fromIter(_);
+
     var itemsToProduce = amount;
     var producedItems : List.List<T> = List.empty();
 
     return {
-      next = func() : ?T {
+      next = func() : ?(Nat, T) {
         if (itemsToProduce == 0) return null;
         itemsToProduce -= 1;
 
         label l while (true) {
-          let ?source = Queue.popFront(sourcesToUse) else return null;
+          let ?(sourceIdx, source) = Queue.popFront(sourcesToUse) else return null;
           switch (source.next()) {
             case (?x) {
-              Queue.pushBack(sourcesToUse, source);
+              Queue.pushBack(sourcesToUse, (sourceIdx, source));
               switch (deduplicationEqual) {
                 case (null) {};
                 case (?eq) if (Option.isSome(List.indexOf(producedItems, eq, x))) {
@@ -162,7 +180,7 @@ module {
                 };
               };
               List.add(producedItems, x);
-              return ?x;
+              return ?(sourceIdx, x);
             };
             case (null) {};
           };
