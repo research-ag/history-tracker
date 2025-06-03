@@ -1,6 +1,7 @@
 import Iter "mo:new-base/Iter";
 import List "mo:new-base/List";
 import Option "mo:new-base/Option";
+import Queue "mo:new-base/Queue";
 
 module {
 
@@ -137,34 +138,38 @@ module {
     };
   };
 
-  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat, deduplicationEqual : ?((T, T) -> Bool)) : [T] {
-    if (sources.size() == 0) return [];
+  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat, deduplicationEqual : ?((T, T) -> Bool)) : Iter.Iter<T> {
+    if (sources.size() == 0) return Iter.empty();
 
-    var sourcesToUse : List.List<Iter.Iter<T>> = List.fromArray(sources);
-    let ret : List.List<T> = List.empty();
+    var sourcesToUse : Queue.Queue<Iter.Iter<T>> = Queue.fromIter(sources.vals());
+    var itemsToProduce = amount;
+    var producedItems : List.List<T> = List.empty();
 
-    label l while (true) {
-      let nextLoopSources : List.List<Iter.Iter<T>> = List.empty();
-      for (b in List.values(sourcesToUse)) {
-        switch (b.next()) {
-          case (?item) {
-            List.add(nextLoopSources, b);
-            switch (deduplicationEqual) {
-              case (null) List.add(ret, item);
-              case (?eq) if (Option.isNull(List.indexOf(ret, eq, item))) {
-                List.add(ret, item);
+    return {
+      next = func() : ?T {
+        if (itemsToProduce == 0) return null;
+        itemsToProduce -= 1;
+
+        label l while (true) {
+          let ?source = Queue.popFront(sourcesToUse) else return null;
+          switch (source.next()) {
+            case (?x) {
+              Queue.pushBack(sourcesToUse, source);
+              switch (deduplicationEqual) {
+                case (null) {};
+                case (?eq) if (Option.isSome(List.indexOf(producedItems, eq, x))) {
+                  continue l;
+                };
               };
+              List.add(producedItems, x);
+              return ?x;
             };
-            if (List.size(ret) == amount) break l;
+            case (null) {};
           };
-          case (_) {};
         };
+        null;
       };
-      if (List.size(nextLoopSources) == 0) break l;
-      sourcesToUse := nextLoopSources;
     };
-
-    List.toArray(ret);
   };
 
 };

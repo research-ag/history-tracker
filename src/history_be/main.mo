@@ -139,8 +139,8 @@ actor class HistoryTracker() = self {
   // gauges
   func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
-  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
-  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
+  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "result=\"success\"", #both, logarithmic(10, 2, 1), false);
+  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "result=\"failure\"", #both, logarithmic(10, 2, 1), false);
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
   let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
   let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
@@ -354,14 +354,12 @@ actor class HistoryTracker() = self {
       |> List.toArray(_);
 
       let canistersToCall = RoundRobin.roundRobinCollect(dataSources, callsToSpawn, ?Nat.equal);
-      for (i in canistersToCall.keys()) {
+      for (idx in canistersToCall) {
         try {
-          ignore callItem(List.get(history_storage, canistersToCall[i]));
+          ignore callItem(List.get(history_storage, idx));
         } catch (err) {
           Debug.print("Error while making self call: " # Error.message(err));
-          for (j in Iter.revRange(canistersToCall.size() - 1, i)) {
-            Queue.pushBack(backlog, List.get(history_storage, canistersToCall[Int.abs(j)]));
-          };
+          Queue.pushBack(backlog, List.get(history_storage, idx));
           return;
         };
       };
