@@ -22,7 +22,6 @@ import PT "mo:promtracker";
 
 import Http "tiny_http";
 import CanisterHistory "CanisterHistory";
-import Concurrent "info/concurrent_calls";
 import RoundRobin "round_robin";
 
 actor class HistoryTracker() = self {
@@ -208,48 +207,6 @@ actor class HistoryTracker() = self {
     allCanistersTaskDataSource.setSize(new_index + 1);
     assert insert_id(canister_id, new_index);
     #ok();
-  };
-
-  private func trackMany_(canister_ids : [Principal]) : async* [Result.Result<(), Errors.Track>] {
-    let len = canister_ids.size();
-    if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
-
-    let results = Array.init<Result.Result<(), Errors.Track>>(len, #ok());
-    let calls = Buffer.Buffer<Concurrent.Item>(len);
-
-    label L for (i in canister_ids.keys()) {
-      let id = canister_ids[i];
-      if (exists_id(id)) {
-        results[i] := #err(#AlreadyTracked({ message = "The canister is already tracked." }));
-        continue L;
-      };
-      let new_canister_history = CanisterHistory.new(id);
-      let item : Concurrent.Item = {
-        call_arg = CanisterHistory.API(new_canister_history).sync_call_arg();
-        register_call = func() {};
-        process_response = func(info) {
-          CanisterHistory.API(new_canister_history).sync_call_process_response(info);
-          let new_index : Nat = List.size(history_storage);
-          List.add(history_storage, new_canister_history);
-          allCanistersTaskDataSource.setSize(new_index + 1);
-          assert insert_id(id, new_index);
-        };
-        process_error = func(e) {
-          results[i] := #err(track_error(e));
-        };
-      };
-      calls.add(item);
-    };
-
-    await* Concurrent.make_calls(
-      Buffer.toArray(calls),
-      func(i) { trapsDetected += 1 }, // trap_cb
-    );
-    Array.freeze(results);
-  };
-
-  public func trackMany(canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
-    await* trackMany_(canister_ids);
   };
 
   public query func canister_changes(canister_id : Principal) : async ?CanisterHistory.CanisterChangesResponse {
@@ -449,24 +406,81 @@ actor class HistoryTracker() = self {
     registerTaskMetrics(task);
   };
 
-  public func trackInTask(taskAlias : Text, canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
-    let ?task = Map.get(tasks, Text.compare, taskAlias) else throw Error.reject("Task with provided alias not found");
-    let trackResult = (await* trackMany_(canister_ids)) |> Array.thaw<Result.Result<(), Errors.Track>>(_);
-    for (i in trackResult.keys()) {
-      switch (trackResult[i]) {
-        case (#ok or #err(#AlreadyTracked _)) {
-          let ?idx = get_index(canister_ids[i]) else Prim.trap("Can never happen!");
-          if (task.dataSource.hasItem(idx, Nat.equal)) {
-            trackResult[i] := #err(#AlreadyTracked({ message = "Already tracked with priority" }));
-          } else {
-            task.dataSource.insertItem(idx);
-            trackResult[i] := #ok();
+  public func trackMany(taskAlias : ?Text, canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
+
+    func syncCall(id : Principal) : async Result.Result<(), Errors.Track> {
+      if (exists_id(id)) {
+        return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
+      };
+      let newCanisterHistory = CanisterHistory.new(id);
+      try {
+        ignore await* CanisterHistory.API(newCanisterHistory).sync();
+      } catch (err) {
+        return #err(track_error(err));
+      };
+      if (exists_id(id)) {
+        return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
+      };
+      let new_index : Nat = List.size(history_storage);
+      List.add(history_storage, newCanisterHistory);
+      allCanistersTaskDataSource.setSize(new_index + 1);
+      assert insert_id(id, new_index);
+      #ok();
+    };
+
+    func trackInMainTask_(canister_ids : [Principal]) : async* [Result.Result<(), Errors.Track>] {
+      let len = canister_ids.size();
+      if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
+
+      let results = Array.init<Result.Result<(), Errors.Track>>(len, #ok());
+      let calls = Buffer.Buffer<(Nat, async Result.Result<(), Errors.Track>)>(len);
+
+      label L for (i in canister_ids.keys()) {
+        let id = canister_ids[i];
+        if (exists_id(id)) {
+          results[i] := #err(#AlreadyTracked({ message = "The canister is already tracked." }));
+          continue L;
+        };
+        try {
+          calls.add(i, syncCall(id));
+        } catch (_) {
+          results[i] := #err(#Busy({ message = "Cannot schedule self-call" }));
+        };
+      };
+
+      for ((i, c) in calls.vals()) {
+        results[i] := try {
+          await c;
+        } catch (err) {
+          #err(track_error(err));
+        };
+      };
+
+      Array.freeze(results);
+    };
+
+    switch (taskAlias) {
+      case (null) await* trackInMainTask_(canister_ids);
+      case (?ta) {
+        let ?task = Map.get(tasks, Text.compare, ta) else throw Error.reject("Task with provided alias not found");
+        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.thaw<Result.Result<(), Errors.Track>>(_);
+        for (i in trackResult.keys()) {
+          switch (trackResult[i]) {
+            case (#ok or #err(#AlreadyTracked _)) {
+              let ?idx = get_index(canister_ids[i]) else Prim.trap("Can never happen!");
+              if (task.dataSource.hasItem(idx, Nat.equal)) {
+                trackResult[i] := #err(#AlreadyTracked({ message = "Already tracked with priority" }));
+              } else {
+                task.dataSource.insertItem(idx);
+                trackResult[i] := #ok();
+              };
+            };
+            case (_) {};
           };
         };
-        case (_) {};
+        Array.freeze(trackResult);
       };
     };
-    Array.freeze(trackResult);
   };
 
   system func preupgrade() {
