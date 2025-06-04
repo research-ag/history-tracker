@@ -143,6 +143,7 @@ actor class HistoryTracker() = self {
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
   let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
   let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
+  let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
   // counters
   let pt_triggers = pt.addCounter("triggers_total", "", false);
   let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
@@ -272,6 +273,7 @@ actor class HistoryTracker() = self {
 
     let now = Prim.time() / 1_000_000_000;
     var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
+    var spawnedCalls = 0;
 
     // process backlog first
     label l while (callsToSpawn > 0) {
@@ -279,8 +281,10 @@ actor class HistoryTracker() = self {
         case (?h) {
           try {
             ignore callItem(h);
+            spawnedCalls += 1;
           } catch (err) {
             Debug.print("Error while making self call for backlog entry: " # Error.message(err));
+            pt_spawnedCalls.update(spawnedCalls);
             return;
           };
           ignore Queue.popFront(backlog);
@@ -314,6 +318,7 @@ actor class HistoryTracker() = self {
       label l for ((sourceIdx, canisterIdx) in canistersToCall) {
         try {
           ignore callItem(List.get(history_storage, canisterIdx));
+          spawnedCalls += 1;
         } catch (err) {
           Debug.print("Error while making self call: " # Error.message(err));
           // revert ctr increment in the data source
@@ -329,6 +334,8 @@ actor class HistoryTracker() = self {
         };
       };
     };
+
+    pt_spawnedCalls.update(spawnedCalls);
   };
 
   var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
