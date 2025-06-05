@@ -98,6 +98,7 @@ actor class HistoryTracker() = self {
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
   let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
   let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
+  let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
   // counters
   let pt_triggers = pt.addCounter("triggers_total", "", false);
   let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
@@ -263,6 +264,7 @@ actor class HistoryTracker() = self {
     pt_backlog.update(List.size(backlog));
 
     let callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
+    var spawnedCalls = 0;
 
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
     var ctr = 0;
@@ -278,7 +280,14 @@ actor class HistoryTracker() = self {
     };
 
     // process backlog first
-    addList(backlog, backlog_pos, inc_backlog_pos);
+    addList(
+      backlog,
+      backlog_pos,
+      func() {
+        inc_backlog_pos();
+        spawnedCalls += 1;
+      },
+    );
 
     // detect the end of a round
     if (sync_pos == List.size(history_storage)) {
@@ -288,14 +297,28 @@ actor class HistoryTracker() = self {
 
     if (sync_pos > 0) {
       // continue a running round
-      addList(history_storage, sync_pos, inc_sync_pos);
+      addList(
+        history_storage,
+        sync_pos,
+        func() {
+          inc_sync_pos();
+          spawnedCalls += 1;
+        },
+      );
     } else {
       // before starting a new round wait for backlog and open calls to clean
       if (calls.size() == 0 and open_calls == 0) {
         let now = Time.now() / 1_000_000_000;
         // also wait for minimum round interval to pass
         if (now >= round_start + rounds_interval) {
-          addList(history_storage, sync_pos, inc_sync_pos);
+          addList(
+            history_storage,
+            sync_pos,
+            func() {
+              inc_sync_pos();
+              spawnedCalls += 1;
+            },
+          );
           round_start := Int.abs(now);
         };
       };
@@ -305,6 +328,7 @@ actor class HistoryTracker() = self {
       Buffer.toArray(calls),
       func(i) { trapsDetected += 1 }, // trap_cb
     );
+    pt_spawnedCalls.update(spawnedCalls);
   };
 
   var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
