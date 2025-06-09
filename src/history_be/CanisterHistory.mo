@@ -20,10 +20,8 @@ module {
     changes : List.List<ExtendedChange>; // all tracked changes
     var latest_change_timestamp : Nat64; // latest tracked change timestamp
     var total_num_changes : Nat64; // total number of changes
-    var module_hash : ?[Nat8]; // current module hash
-    var controllers : [Principal]; // current controllers
     var timestamp_nanos : Nat64; // latest sync timestamp
-    var sync_version : Nat; // sync version (nubmer of syncs)
+    var sync_version : Nat; // sync version (number of syncs)
     var metadata : {
       var name : Text;
       var description : Text;
@@ -39,19 +37,10 @@ module {
     sync_version : Nat;
   };
 
-  public type CanisterStateResponse = {
-    module_hash : ?[Nat8];
-    controllers : [Principal];
-    timestamp_nanos : Nat64;
-    sync_version : Nat;
-  };
-
   public func new(canister_id : Principal) : History = {
     changes = List.empty<ExtendedChange>();
     var latest_change_timestamp = 0;
     var total_num_changes = 0;
-    var module_hash = null;
-    var controllers = [];
     var timestamp_nanos = 0;
     var sync_version = 0;
     var metadata = {
@@ -97,8 +86,6 @@ module {
       };
 
       state.total_num_changes := info.total_num_changes;
-      state.module_hash := info.module_hash;
-      state.controllers := info.controllers;
       state.timestamp_nanos := Prim.time();
       state.sync_version += 1;
     };
@@ -106,13 +93,6 @@ module {
     public func canister_changes() : CanisterChangesResponse = {
       changes = List.toArray(state.changes);
       total_num_changes = state.total_num_changes;
-      timestamp_nanos = state.timestamp_nanos;
-      sync_version = state.sync_version;
-    };
-
-    public func canister_state() : CanisterStateResponse = {
-      module_hash = state.module_hash;
-      controllers = state.controllers;
       timestamp_nanos = state.timestamp_nanos;
       sync_version = state.sync_version;
     };
