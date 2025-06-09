@@ -2,6 +2,7 @@
 base = "0.14.9"
 new-base = "0.4.0"
 promtracker = "0.5.4"
+stable-trie = "0.0.1"
 
 [dev-dependencies]
 test = "2.0.0"

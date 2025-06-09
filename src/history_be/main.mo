@@ -17,12 +17,13 @@ import Timer "mo:base/Timer";
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
 import Queue "mo:new-base/Queue";
-
+import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
 
 import Http "tiny_http";
 import CanisterHistory "CanisterHistory";
 import RoundRobin "round_robin";
+import PB "principal_blob";
 
 actor class HistoryTracker() = self {
 
@@ -80,8 +81,28 @@ actor class HistoryTracker() = self {
   var canisters_num_to_sync = 100;
 
   stable let history_storage = List.empty<CanisterHistory.History>();
+
   /// Maps the canister id to the history instance index in the storage.
-  stable var history_storage_map = Map.empty<Principal, Nat>();
+  var storage_map : Enumeration.Enumeration = Enumeration.Enumeration({
+    aridity = 4;
+    pointer_size = 6;
+    key_size = 32;
+    root_aridity = ?(4 ** 6);
+    value_size = 0;
+  });
+  stable var storage_map_data : ?Enumeration.StableData = null;
+  switch (storage_map_data) {
+    case (?d) storage_map.unshare(d);
+    case (null) {};
+  };
+
+  if (storage_map.size() == 0) {
+    for (h in List.values(history_storage)) {
+      ignore storage_map.add(PB.toBlob(h.canister_id), "");
+    };
+  } else if (storage_map.size() != List.size(history_storage)) {
+    Prim.trap("Storage map out of sync");
+  };
 
   /// Main task which loops over all of the canisters
   stable var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
@@ -100,7 +121,8 @@ actor class HistoryTracker() = self {
   );
 
   func get_index(canister_id : Principal) : ?Nat {
-    Map.get<Principal, Nat>(history_storage_map, Principal.compare, canister_id);
+    let ?(_, idx) = storage_map.lookup(PB.toBlob(canister_id)) else return null;
+    ?idx;
   };
 
   func get_history(canister_id : Principal) : ?CanisterHistory.History {
@@ -111,13 +133,12 @@ actor class HistoryTracker() = self {
   };
 
   func insert_id(canister_id : Principal, index : Nat) : Bool {
-    let res = Map.insert<Principal, Nat>(history_storage_map, Principal.compare, canister_id, index);
-    history_storage_map := res.0;
-    res.1;
+    let idx = storage_map.add(PB.toBlob(canister_id), "");
+    idx == index;
   };
 
   func exists_id(canister_id : Principal) : Bool {
-    Map.containsKey(history_storage_map, Principal.compare, canister_id);
+    Option.isSome(storage_map.lookup(PB.toBlob(canister_id)));
   };
 
   let start_time = Time.now();
@@ -177,9 +198,7 @@ actor class HistoryTracker() = self {
     List.size(history_storage);
   };
 
-  public query func is_canister_tracked(canister_id : Principal) : async Bool {
-    Map.get(history_storage_map, Principal.compare, canister_id) != null;
-  };
+  public query func is_canister_tracked(canister_id : Principal) : async Bool = async exists_id(canister_id);
 
   func track_error(e : Error.Error) : Errors.Track {
     switch (Error.code(e)) {
@@ -484,6 +503,7 @@ actor class HistoryTracker() = self {
   };
 
   system func preupgrade() {
+    storage_map_data := ?storage_map.share();
     allCanistersTaskData := (allCanistersTaskDataSource.share(), allCanistersTask);
     tasksData := Map.map<Text, Task.BufferTask, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>(
       tasks,
