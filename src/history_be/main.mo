@@ -472,7 +472,7 @@ actor class HistoryTracker() = self {
 
       // detect the end of a round
       for (t in List.values(tasksToRun)) {
-        if (t.dataSource.ctr() == t.dataSource.size()) {
+        if (t.dataSource.ctr() == 0) {
           t.lastRoundCompletedAt := now;
           t.lastRoundDuration := now - t.roundStart;
           switch (t.metrics.roundDurationGauge) {
