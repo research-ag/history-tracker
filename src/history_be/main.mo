@@ -325,22 +325,24 @@ actor class HistoryTracker() = self {
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool = async exists_id(canister_id);
 
-  public query func historyStorageMemoryStats() : async {
-    amount : Nat;
-    totalSize : Nat;
-    min : Nat;
-    max : Nat;
-    average : Float;
+  public query func historyStorageMemoryStats() : async ?{
+    canistersAmount : Nat;
+    size : {
+      total : Nat;
+      min : Nat;
+      max : Nat;
+      average : Float;
+    };
+    changeRecords : {
+      total : Nat;
+      min : Nat;
+      max : Nat;
+      average : Float;
+    };
   } {
-    let amount = List.size(history_storage);
-    if (amount == 0) {
-      return {
-        amount;
-        totalSize = 0;
-        min = 0;
-        max = 0;
-        average = 0.0;
-      };
+    let canistersAmount = List.size(history_storage);
+    if (canistersAmount == 0) {
+      return null;
     };
 
     func freezeHistory(h : CanisterHistory.History) : {
@@ -380,21 +382,36 @@ actor class HistoryTracker() = self {
       total_num_changes = h.total_num_changes;
     };
 
-    var min = 1_000_000_000_000;
-    var max = 0;
+    var minSize = 1_000_000_000_000;
+    var maxSize = 0;
     var totalSize = 0;
+    var minChanges = 1_000_000_000_000;
+    var maxChanges = 0;
+    var totalChanges = 0;
     for (h in List.values(history_storage)) {
+      let changes = List.size(h.changes);
+      minChanges := Nat.min(minChanges, changes);
+      maxChanges := Nat.max(maxChanges, changes);
+      totalChanges += changes;
       let size = to_candid (freezeHistory(h)) |> _.size();
-      min := Nat.min(min, size);
-      max := Nat.max(max, size);
+      minSize := Nat.min(minSize, size);
+      maxSize := Nat.max(maxSize, size);
       totalSize += size;
     };
-    {
-      amount;
-      totalSize;
-      min;
-      max;
-      average = Float.fromInt(totalSize) / Float.fromInt(amount);
+    ?{
+      canistersAmount;
+      size = {
+        total = totalSize;
+        min = minSize;
+        max = maxSize;
+        average = Float.fromInt(totalSize) / Float.fromInt(canistersAmount);
+      };
+      changeRecords = {
+        total = totalChanges;
+        min = minChanges;
+        max = maxChanges;
+        average = Float.fromInt(totalChanges) / Float.fromInt(canistersAmount);
+      };
     };
   };
 
