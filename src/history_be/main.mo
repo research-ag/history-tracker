@@ -261,7 +261,7 @@ actor class HistoryTracker() = self {
 
     var ctr = 0;
 
-    func callList(l : List.List<CanisterHistory.History>, start : Nat, register_cb : () -> ()) {
+    func callList(l : List.List<CanisterHistory.History>, start : Nat, register_cb : () -> ()) : async* () {
       var i = start;
       while (ctr < callsToSpawn and i < List.size(l)) {
         let history = List.get(l, i);
@@ -274,13 +274,12 @@ actor class HistoryTracker() = self {
 
     // process backlog first
     await* callList(
-        backlog,
-        backlog_pos,
-        inc_backlog_pos,
-        func() {
-            inc_backlog_pos();
-            spawnedCalls += 1;
-        },
+      backlog,
+      backlog_pos,
+      func() {
+        inc_backlog_pos();
+        spawnedCalls += 1;
+      },
     );
 
     // detect the end of a round
