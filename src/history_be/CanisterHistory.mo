@@ -6,7 +6,7 @@ import Prim "mo:prim";
 import IC "ic";
 
 module {
-  type ExtendedChange = IC.CanisterChange and {
+  public type ExtendedChange = IC.CanisterChange and {
     change_index : Nat;
   };
 

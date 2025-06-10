@@ -2,6 +2,7 @@ import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
 // import Debug "mo:base/Debug";
 import Error "mo:base/Error";
+import Float "mo:base/Float";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
@@ -323,6 +324,79 @@ actor class HistoryTracker() = self {
   };
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool = async exists_id(canister_id);
+
+  public query func historyStorageMemoryStats() : async {
+    amount : Nat;
+    totalSize : Nat;
+    min : Nat;
+    max : Nat;
+    average : Float;
+  } {
+    let amount = List.size(history_storage);
+    if (amount == 0) {
+      return {
+        amount;
+        totalSize = 0;
+        min = 0;
+        max = 0;
+        average = 0.0;
+      };
+    };
+
+    func freezeHistory(h : CanisterHistory.History) : {
+      canister_id : Principal;
+      latest_change_timestamp : Nat64;
+      changes : {
+        blocks : [[?CanisterHistory.ExtendedChange]];
+        blockIndex : Nat;
+        elementIndex : Nat;
+      };
+      metadata : {
+        description : Text;
+        latest_update_timestamp : Nat64;
+        name : Text;
+      };
+      sync_version : Nat;
+      timestamp_nanos : Nat64;
+      total_num_changes : Nat64;
+    } = {
+      h with
+      changes = {
+        blocks = Array.map<[var ?CanisterHistory.ExtendedChange], [?CanisterHistory.ExtendedChange]>(
+          Array.freeze(h.changes.blocks),
+          func(x) = Array.freeze(x),
+        );
+        blockIndex = h.changes.blockIndex;
+        elementIndex = h.changes.blockIndex;
+      };
+      latest_change_timestamp = h.latest_change_timestamp;
+      metadata = {
+        description = h.metadata.description;
+        latest_update_timestamp = h.metadata.latest_update_timestamp;
+        name = h.metadata.name;
+      };
+      sync_version = h.sync_version;
+      timestamp_nanos = h.timestamp_nanos;
+      total_num_changes = h.total_num_changes;
+    };
+
+    var min = 1_000_000_000_000;
+    var max = 0;
+    var totalSize = 0;
+    for (h in List.values(history_storage)) {
+      let size = to_candid (freezeHistory(h)) |> _.size();
+      min := Nat.min(min, size);
+      max := Nat.max(max, size);
+      totalSize += size;
+    };
+    {
+      amount;
+      totalSize;
+      min;
+      max;
+      average = Float.fromInt(totalSize) / Float.fromInt(amount);
+    };
+  };
 
   func track_error(e : Error.Error) : Errors.Track {
     switch (Error.code(e)) {
