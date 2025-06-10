@@ -13,7 +13,6 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 import Timer "mo:base/Timer";
-import Iter "mo:base/Iter";
 
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
@@ -46,6 +45,8 @@ actor class HistoryTracker() = self {
       alias : Text;
       var roundsInterval : Nat64;
       var roundStart : Nat64;
+      var lastRoundCompletedAt : Nat64;
+      var lastRoundDuration : Nat64;
     };
 
     // common interface
@@ -54,12 +55,22 @@ actor class HistoryTracker() = self {
       dataSource : RoundRobin.RoundRobinSource<Nat>;
       var roundsInterval : Nat64;
       var roundStart : Nat64;
+      var lastRoundCompletedAt : Nat64;
+      var lastRoundDuration : Nat64;
+      metrics : {
+        var roundDurationGauge : ?PT.GaugeValue;
+      };
     };
     public func newTask(state : TaskState, dataSource : RoundRobin.RoundRobinSource<Nat>) : Task = {
       alias = state.alias;
       dataSource;
       var roundsInterval = state.roundsInterval;
       var roundStart = state.roundStart;
+      var lastRoundCompletedAt = state.lastRoundCompletedAt;
+      var lastRoundDuration = state.lastRoundDuration;
+      metrics = {
+        var roundDurationGauge = null;
+      };
     };
 
     // sub-interface
@@ -68,12 +79,22 @@ actor class HistoryTracker() = self {
       dataSource : RoundRobin.RoundRobinBuffer<Nat>;
       var roundsInterval : Nat64;
       var roundStart : Nat64;
+      var lastRoundCompletedAt : Nat64;
+      var lastRoundDuration : Nat64;
+      metrics : {
+        var roundDurationGauge : ?PT.GaugeValue;
+      };
     };
     public func newBufferTask(state : TaskState, dataSource : RoundRobin.RoundRobinBuffer<Nat>) : BufferTask = {
       alias = state.alias;
       dataSource;
       var roundsInterval = state.roundsInterval;
       var roundStart = state.roundStart;
+      var lastRoundCompletedAt = state.lastRoundCompletedAt;
+      var lastRoundDuration = state.lastRoundDuration;
+      metrics = {
+        var roundDurationGauge = null;
+      };
     };
 
   };
@@ -126,7 +147,13 @@ actor class HistoryTracker() = self {
   /// Main task which loops over all of the canisters
   stable var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
     { size = 0; ctr = 0; round = 0 },
-    { alias = "all_canisters"; var roundsInterval = 300; var roundStart = 0 },
+    {
+      alias = "all_canisters";
+      var roundsInterval = 300;
+      var roundStart = 0;
+      var lastRoundCompletedAt = 0;
+      var lastRoundDuration = 0;
+    },
   );
   let allCanistersTaskDataSource : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator(?allCanistersTaskData.0);
   allCanistersTaskDataSource.setSize(List.size(history_storage));
@@ -190,8 +217,6 @@ actor class HistoryTracker() = self {
   var trapsDetected = 0;
 
   let backlog = Queue.empty<CanisterHistory.History>();
-  var last_round_completed_at : Int = 0;
-  var last_round_duration : Int = 0;
 
   // PromTracker
   let pt = PT.PromTracker("", 65);
@@ -204,7 +229,6 @@ actor class HistoryTracker() = self {
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
   let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
   let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
-  let pt_roundDuration = pt.addGauge("round_duration", "", #both, linear(1, 1), false);
   let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
   // counters
   let pt_triggers = pt.addCounter("triggers_total", "", false);
@@ -224,15 +248,15 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("tracked_30d", "", func() = sum_buckets(MONTH_HOURS));
 
   func registerTaskMetrics(task : Task.Task) {
-    ignore pt.addPullValue("tracked_canisters_total", "task=\"" # task.alias # "\"", func() = task.dataSource.size());
-    ignore pt.addPullValue("sync_pos", "task=\"" # task.alias # "\"", func() = task.dataSource.ctr());
-    ignore pt.addPullValue("round", "task=\"" # task.alias # "\"", func() = task.dataSource.round());
-    ignore pt.addPullValue("round_start", "task=\"" # task.alias # "\"", func() = task.roundStart |> Nat64.toNat(_));
-    ignore pt.addPullValue("rounds_interval", "task=\"" # task.alias # "\"", func() = task.roundsInterval |> Nat64.toNat(_));
-    // TODO
-    ignore pt.addPullValue("last_round_completed_at", "", func() = Int.abs(last_round_completed_at));
-      ignore pt.addPullValue("last_round_duration", "", func() = Int.abs(last_round_duration));
-
+    let lbl = "task=\"" # task.alias # "\"";
+    ignore pt.addPullValue("tracked_canisters_total", lbl, func() = task.dataSource.size());
+    ignore pt.addPullValue("sync_pos", lbl, func() = task.dataSource.ctr());
+    ignore pt.addPullValue("round", lbl, func() = task.dataSource.round());
+    ignore pt.addPullValue("round_start", lbl, func() = task.roundStart |> Nat64.toNat(_));
+    ignore pt.addPullValue("rounds_interval", lbl, func() = task.roundsInterval |> Nat64.toNat(_));
+    ignore pt.addPullValue("last_round_completed_at", lbl, func() = task.lastRoundCompletedAt |> Nat64.toNat(_));
+    ignore pt.addPullValue("last_round_duration", lbl, func() = task.lastRoundDuration |> Nat64.toNat(_));
+    task.metrics.roundDurationGauge := ?pt.addGauge("round_duration", lbl, #both, linear(1, 1), false);
   };
   registerTaskMetrics(allCanistersTask);
   for (task in Map.values(tasks)) {
@@ -279,15 +303,22 @@ actor class HistoryTracker() = self {
     };
   };
 
-  public query func last_round_details() : async {
-    completed_at : Int;
-    duration : Int;
+  public query func last_round_details(taskAlias : ?Text) : async {
+    completed_at : Nat64;
+    duration : Nat64;
     current_round : Nat;
   } {
+    let task = switch (taskAlias) {
+      case (?"all_canisters" or null) allCanistersTask;
+      case (?alias) {
+        let ?task = Map.get(tasks, Text.compare, alias) else throw Error.reject("Task with provided alias not found");
+        task;
+      };
+    };
     {
-      completed_at = last_round_completed_at;
-      duration = last_round_duration;
-      current_round = round;
+      completed_at = task.lastRoundCompletedAt;
+      duration = task.lastRoundDuration;
+      current_round = task.dataSource.round();
     };
   };
 
@@ -388,8 +419,7 @@ actor class HistoryTracker() = self {
           try {
             ignore callItem(h);
             spawnedCalls += 1;
-          } catch (err) {
-            Debug.print("Error while making self call for backlog entry: " # Error.message(err));
+          } catch (_) {
             pt_spawnedCalls.update(spawnedCalls);
             return;
           };
@@ -425,8 +455,7 @@ actor class HistoryTracker() = self {
         try {
           ignore callItem(List.get(history_storage, canisterIdx));
           spawnedCalls += 1;
-        } catch (err) {
-          Debug.print("Error while making self call: " # Error.message(err));
+        } catch (_) {
           // revert ctr increment in the data source
           let task = List.get(tasksToRun, sourceIdx);
           task.dataSource.decCtr();
@@ -434,9 +463,22 @@ actor class HistoryTracker() = self {
         };
       };
 
+      // detect the start of a round
       for ((t, lastRound) in List.values(roundStartCandidates)) {
         if (t.dataSource.round() != lastRound or t.dataSource.ctr() > 0) {
           t.roundStart := now;
+        };
+      };
+
+      // detect the end of a round
+      for (t in List.values(tasksToRun)) {
+        if (t.dataSource.ctr() == t.dataSource.size()) {
+          t.lastRoundCompletedAt := now;
+          t.lastRoundDuration := (now / 1_000_000_000) - t.roundStart;
+          switch (t.metrics.roundDurationGauge) {
+            case (?g) g.update(t.lastRoundDuration |> Nat64.toNat(_));
+            case (_) {};
+          };
         };
       };
     };
@@ -512,6 +554,8 @@ actor class HistoryTracker() = self {
         alias = taskAlias;
         var roundStart = 0;
         var roundsInterval = 300;
+        var lastRoundCompletedAt = 0;
+        var lastRoundDuration = 0;
       },
       RoundRobin.RoundRobinBuffer(null),
     );
