@@ -474,7 +474,7 @@ actor class HistoryTracker() = self {
       for (t in List.values(tasksToRun)) {
         if (t.dataSource.ctr() == t.dataSource.size()) {
           t.lastRoundCompletedAt := now;
-          t.lastRoundDuration := (now / 1_000_000_000) - t.roundStart;
+          t.lastRoundDuration := now - t.roundStart;
           switch (t.metrics.roundDurationGauge) {
             case (?g) g.update(t.lastRoundDuration |> Nat64.toNat(_));
             case (_) {};
