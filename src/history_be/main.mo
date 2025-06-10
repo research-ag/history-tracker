@@ -1,6 +1,6 @@
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
-import Debug "mo:base/Debug";
+// import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
 import Iter "mo:base/Iter";
@@ -13,6 +13,7 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 import Timer "mo:base/Timer";
+import Iter "mo:base/Iter";
 
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
@@ -77,6 +78,24 @@ actor class HistoryTracker() = self {
 
   };
 
+  type TrackingBuckets = {
+    var buckets : [var Nat]; // Mutable array of hourly counters
+    var head_index : Nat; // Points to the current hour's bucket
+    var last_rotation : Int; // Last time buckets were rotated
+  };
+
+  type TrackingStats = {
+    new_24h : Nat;
+    new_7d : Nat;
+    new_30d : Nat;
+  };
+
+  // Time constants
+  let HOUR_NS = 3600_000_000_000; // 1 hour in nanoseconds
+  let DAY_HOURS = 24;
+  let WEEK_HOURS = 168; // 7 * 24
+  let MONTH_HOURS = 720; // 30 * 24
+
   /// Number of canisters that are synchronized per iteration.
   var canisters_num_to_sync = 100;
 
@@ -120,6 +139,25 @@ actor class HistoryTracker() = self {
     func((_, td)) = Task.newBufferTask(td.1, RoundRobin.RoundRobinBuffer<Nat>(?td.0)),
   );
 
+  stable var tracking_buckets : TrackingBuckets = {
+    var buckets = Array.init<Nat>(MONTH_HOURS, 0);
+    var head_index = 0;
+    var last_rotation = Time.now();
+  };
+
+  func get_bucket_index(hours_ago : Nat) : Nat {
+    // Calculate real index using circular buffer logic
+    (tracking_buckets.head_index + hours_ago) % MONTH_HOURS;
+  };
+
+  func sum_buckets(hours : Nat) : Nat {
+    var sum = 0;
+    for (i in Iter.range(0, hours - 1)) {
+      sum += tracking_buckets.buckets[get_bucket_index(i)];
+    };
+    sum;
+  };
+
   func get_index(canister_id : Principal) : ?Nat {
     let ?(_, idx) = storage_map.lookup(PB.toBlob(canister_id)) else return null;
     ?idx;
@@ -152,6 +190,8 @@ actor class HistoryTracker() = self {
   var trapsDetected = 0;
 
   let backlog = Queue.empty<CanisterHistory.History>();
+  var last_round_completed_at : Int = 0;
+  var last_round_duration : Int = 0;
 
   // PromTracker
   let pt = PT.PromTracker("", 65);
@@ -159,11 +199,12 @@ actor class HistoryTracker() = self {
   // gauges
   func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
-  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "result=\"success\"", #both, logarithmic(10, 2, 1), false);
-  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "result=\"failure\"", #both, logarithmic(10, 2, 1), false);
+  let pt_syncSuccessDuration = pt.addGauge("canister_sync_success_duration", "", #both, logarithmic(10, 2, 1), false);
+  let pt_syncFailureDuration = pt.addGauge("canister_sync_failure_duration", "", #both, logarithmic(10, 2, 1), false);
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
   let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
   let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
+  let pt_roundDuration = pt.addGauge("round_duration", "", #both, linear(1, 1), false);
   let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
   // counters
   let pt_triggers = pt.addCounter("triggers_total", "", false);
@@ -178,6 +219,9 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
   ignore pt.addPullValue("backlog_size", "", func() = Queue.size(backlog));
   ignore pt.addPullValue("open_calls", "", func() = open_calls);
+  ignore pt.addPullValue("tracked_24h", "", func() = sum_buckets(DAY_HOURS));
+  ignore pt.addPullValue("tracked_7d", "", func() = sum_buckets(WEEK_HOURS));
+  ignore pt.addPullValue("tracked_30d", "", func() = sum_buckets(MONTH_HOURS));
 
   func registerTaskMetrics(task : Task.Task) {
     ignore pt.addPullValue("tracked_canisters_total", "task=\"" # task.alias # "\"", func() = task.dataSource.size());
@@ -185,6 +229,10 @@ actor class HistoryTracker() = self {
     ignore pt.addPullValue("round", "task=\"" # task.alias # "\"", func() = task.dataSource.round());
     ignore pt.addPullValue("round_start", "task=\"" # task.alias # "\"", func() = task.roundStart |> Nat64.toNat(_));
     ignore pt.addPullValue("rounds_interval", "task=\"" # task.alias # "\"", func() = task.roundsInterval |> Nat64.toNat(_));
+    // TODO
+    ignore pt.addPullValue("last_round_completed_at", "", func() = Int.abs(last_round_completed_at));
+      ignore pt.addPullValue("last_round_duration", "", func() = Int.abs(last_round_duration));
+
   };
   registerTaskMetrics(allCanistersTask);
   for (task in Map.values(tasks)) {
@@ -196,6 +244,51 @@ actor class HistoryTracker() = self {
 
   public query func tracked_canisters_total() : async Nat {
     List.size(history_storage);
+  };
+
+  func rotate_tracking_buckets() {
+    let now = Time.now();
+    let hours_passed = Int.abs(now - tracking_buckets.last_rotation) / HOUR_NS;
+
+    if (hours_passed > 0) {
+      // Clear only the new buckets we'll use
+      let rotation_count = Nat.min(hours_passed, MONTH_HOURS);
+
+      // Update head position
+      for (i in Iter.range(0, rotation_count - 1)) {
+        let new_head = (tracking_buckets.head_index + (MONTH_HOURS - 1) : Nat) % MONTH_HOURS;
+        tracking_buckets.buckets[new_head] := 0;
+        tracking_buckets.head_index := new_head;
+      };
+
+      tracking_buckets.last_rotation := now;
+    };
+  };
+
+  func record_new_track() {
+    rotate_tracking_buckets();
+    tracking_buckets.buckets[tracking_buckets.head_index] += 1;
+  };
+
+  public query func get_tracking_stats() : async TrackingStats {
+    rotate_tracking_buckets();
+    {
+      new_24h = sum_buckets(DAY_HOURS);
+      new_7d = sum_buckets(WEEK_HOURS);
+      new_30d = sum_buckets(MONTH_HOURS);
+    };
+  };
+
+  public query func last_round_details() : async {
+    completed_at : Int;
+    duration : Int;
+    current_round : Nat;
+  } {
+    {
+      completed_at = last_round_completed_at;
+      duration = last_round_duration;
+      current_round = round;
+    };
   };
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool = async exists_id(canister_id);
@@ -225,6 +318,7 @@ actor class HistoryTracker() = self {
     let new_index : Nat = List.size(history_storage);
     List.add(history_storage, new_canister_history);
     allCanistersTaskDataSource.setSize(new_index + 1);
+    record_new_track();
     assert insert_id(canister_id, new_index);
     #ok();
   };
@@ -280,7 +374,7 @@ actor class HistoryTracker() = self {
   func trigger_sync() : async* () {
     pt_triggers.add(1);
     pt_openCalls.update(open_calls);
-    Debug.print("Open calls: " # debug_show open_calls);
+    // Debug.print("Open calls: " # debug_show open_calls);
     pt_backlog.update(Queue.size(backlog));
 
     let now = Prim.time() / 1_000_000_000;
@@ -442,6 +536,7 @@ actor class HistoryTracker() = self {
       };
       let new_index : Nat = List.size(history_storage);
       List.add(history_storage, newCanisterHistory);
+      record_new_track();
       allCanistersTaskDataSource.setSize(new_index + 1);
       assert insert_id(id, new_index);
       #ok();

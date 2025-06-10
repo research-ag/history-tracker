@@ -19,12 +19,12 @@ import {
   Textarea,
 } from "@mui/joy";
 
+import { useMetadataSources } from "@fe/utils/metadata-sources";
 import {
-  useMetadataSources,
-  validateMetadataSources,
+  validatePrincipals,
   principalsToText,
   textToPrincipals,
-} from "@fe/utils/metadata-sources";
+} from "@fe/utils/principal";
 
 interface MetadataSourcesFormValues {
   sources: string;
@@ -36,7 +36,7 @@ interface MetadataSourcesModalProps {
 }
 
 const schema = zod.object({
-  sources: zod.string().refine(validateMetadataSources, "Not valid."),
+  sources: zod.string().refine(validatePrincipals, "Not valid."),
 });
 
 const MetadataSourcesModal = ({
