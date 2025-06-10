@@ -14,7 +14,7 @@ const ThemeButton = ({ sx }: ThemeButtonProps) => {
   return (
     <IconButton
       sx={sx}
-      variant="outlined"
+      variant="solid"
       color="neutral"
       onClick={() => setMode(mode === "dark" ? "light" : "dark")}
     >

@@ -1,6 +1,6 @@
 import Array "mo:base/Array";
 import Buffer "mo:base/Buffer";
-import Debug "mo:base/Debug";
+// import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
 import Nat "mo:base/Nat";
@@ -10,6 +10,7 @@ import Result "mo:base/Result";
 import Text "mo:base/Text";
 import Time "mo:base/Time";
 import Timer "mo:base/Timer";
+import Iter "mo:base/Iter";
 
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
@@ -35,6 +36,24 @@ actor class HistoryTracker() = self {
     };
   };
 
+  type TrackingBuckets = {
+    var buckets : [var Nat]; // Mutable array of hourly counters
+    var head_index : Nat; // Points to the current hour's bucket
+    var last_rotation : Int; // Last time buckets were rotated
+  };
+
+  type TrackingStats = {
+    new_24h : Nat;
+    new_7d : Nat;
+    new_30d : Nat;
+  };
+
+  // Time constants
+  let HOUR_NS = 3600_000_000_000; // 1 hour in nanoseconds
+  let DAY_HOURS = 24;
+  let WEEK_HOURS = 168; // 7 * 24
+  let MONTH_HOURS = 720; // 30 * 24
+
   /// Number of canisters that are synchronized per iteration.
   var canisters_num_to_sync = 100;
 
@@ -45,6 +64,25 @@ actor class HistoryTracker() = self {
 
   /// Maps the canister id to the history instance index in the storage.
   stable var history_storage_map = Map.empty<Principal, Nat>();
+
+  stable var tracking_buckets : TrackingBuckets = {
+    var buckets = Array.init<Nat>(MONTH_HOURS, 0);
+    var head_index = 0;
+    var last_rotation = Time.now();
+  };
+
+  func get_bucket_index(hours_ago : Nat) : Nat {
+    // Calculate real index using circular buffer logic
+    (tracking_buckets.head_index + hours_ago) % MONTH_HOURS;
+  };
+
+  func sum_buckets(hours : Nat) : Nat {
+    var sum = 0;
+    for (i in Iter.range(0, hours - 1)) {
+      sum += tracking_buckets.buckets[get_bucket_index(i)];
+    };
+    sum;
+  };
 
   func get_index(canister_id : Principal) : ?Nat {
     Map.get<Principal, Nat>(history_storage_map, Principal.compare, canister_id);
@@ -81,6 +119,9 @@ actor class HistoryTracker() = self {
   var sync_pos = 0;
   var round_start = 0;
 
+  var last_round_completed_at : Int = 0;
+  var last_round_duration : Int = 0;
+
   let backlog = List.empty<CanisterHistory.History>();
   var backlog_pos = 0;
 
@@ -93,11 +134,12 @@ actor class HistoryTracker() = self {
   // gauges
   func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
-  let pt_syncSuccessDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
-  let pt_syncFailureDuration = pt.addGauge("canister_sync_duration", "", #both, logarithmic(10, 2, 1), false);
+  let pt_syncSuccessDuration = pt.addGauge("canister_sync_success_duration", "", #both, logarithmic(10, 2, 1), false);
+  let pt_syncFailureDuration = pt.addGauge("canister_sync_failure_duration", "", #both, logarithmic(10, 2, 1), false);
   let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
   let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
   let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
+  let pt_roundDuration = pt.addGauge("round_duration", "", #both, linear(1, 1), false);
   let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
   // counters
   let pt_triggers = pt.addCounter("triggers_total", "", false);
@@ -117,13 +159,63 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("sync_pos", "", func() = sync_pos);
   ignore pt.addPullValue("round_start", "", func() = round_start);
   ignore pt.addPullValue("round", "", func() = round);
+  ignore pt.addPullValue("last_round_completed_at", "", func() = Int.abs(last_round_completed_at));
+  ignore pt.addPullValue("last_round_duration", "", func() = Int.abs(last_round_duration));
   ignore pt.addPullValue("open_calls", "", func() = open_calls);
+  ignore pt.addPullValue("tracked_24h", "", func() = sum_buckets(DAY_HOURS));
+  ignore pt.addPullValue("tracked_7d", "", func() = sum_buckets(WEEK_HOURS));
+  ignore pt.addPullValue("tracked_30d", "", func() = sum_buckets(MONTH_HOURS));
 
   stable var pt_data : PT.StableData = null;
   pt.unshare(pt_data);
 
   public query func tracked_canisters_total() : async Nat {
     List.size(history_storage);
+  };
+
+  func rotate_tracking_buckets() {
+    let now = Time.now();
+    let hours_passed = Int.abs(now - tracking_buckets.last_rotation) / HOUR_NS;
+
+    if (hours_passed > 0) {
+      // Clear only the new buckets we'll use
+      let rotation_count = Nat.min(hours_passed, MONTH_HOURS);
+
+      // Update head position
+      for (i in Iter.range(0, rotation_count - 1)) {
+        let new_head = (tracking_buckets.head_index + (MONTH_HOURS - 1) : Nat) % MONTH_HOURS;
+        tracking_buckets.buckets[new_head] := 0;
+        tracking_buckets.head_index := new_head;
+      };
+
+      tracking_buckets.last_rotation := now;
+    };
+  };
+
+  func record_new_track() {
+    rotate_tracking_buckets();
+    tracking_buckets.buckets[tracking_buckets.head_index] += 1;
+  };
+
+  public query func get_tracking_stats() : async TrackingStats {
+    rotate_tracking_buckets();
+    {
+      new_24h = sum_buckets(DAY_HOURS);
+      new_7d = sum_buckets(WEEK_HOURS);
+      new_30d = sum_buckets(MONTH_HOURS);
+    };
+  };
+
+  public query func last_round_details() : async {
+    completed_at : Int;
+    duration : Int;
+    current_round : Nat;
+  } {
+    {
+      completed_at = last_round_completed_at;
+      duration = last_round_duration;
+      current_round = round;
+    };
   };
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool {
@@ -154,6 +246,7 @@ actor class HistoryTracker() = self {
     };
     let new_index : Nat = List.size(history_storage);
     List.add(history_storage, new_canister_history);
+    record_new_track();
     assert insert_id(canister_id, new_index);
     #ok();
   };
@@ -179,6 +272,7 @@ actor class HistoryTracker() = self {
           CanisterHistory.API(new_canister_history).sync_call_process_response(info);
           let new_index : Nat = List.size(history_storage);
           List.add(history_storage, new_canister_history);
+          record_new_track();
           assert insert_id(id, new_index);
         };
         process_error = func(e) {
@@ -199,13 +293,6 @@ actor class HistoryTracker() = self {
     Option.map<CanisterHistory.History, CanisterHistory.CanisterChangesResponse>(
       get_history(canister_id),
       func(h) = CanisterHistory.API(h).canister_changes(),
-    );
-  };
-
-  public query func canister_state(canister_id : Principal) : async ?CanisterHistory.CanisterStateResponse {
-    Option.map<CanisterHistory.History, CanisterHistory.CanisterStateResponse>(
-      get_history(canister_id),
-      func(h) = CanisterHistory.API(h).canister_state(),
     );
   };
 
@@ -253,7 +340,7 @@ actor class HistoryTracker() = self {
   func trigger_sync() : async* () {
     pt_triggers.add(1);
     pt_openCalls.update(open_calls);
-    Debug.print("Open calls: " # debug_show open_calls);
+    // Debug.print("Open calls: " # debug_show open_calls);
     pt_backlog.update(List.size(backlog));
 
     let callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
@@ -284,6 +371,12 @@ actor class HistoryTracker() = self {
 
     // detect the end of a round
     if (sync_pos == List.size(history_storage)) {
+      let now = Time.now();
+      last_round_completed_at := now;
+      last_round_duration := (now / 1_000_000_000) - round_start;
+
+      pt_roundDuration.update(Int.abs(last_round_duration));
+
       sync_pos := 0;
       round += 1;
     };
