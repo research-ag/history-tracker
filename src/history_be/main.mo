@@ -328,6 +328,10 @@ actor class HistoryTracker() = self {
 
   public query func historyStorageMemoryStats() : async ?{
     canistersAmount : Nat;
+    setSize : {
+      principals : Nat;
+      hashes : Nat;
+    };
     size : {
       total : Nat;
       min : Nat;
@@ -401,6 +405,10 @@ actor class HistoryTracker() = self {
     };
     ?{
       canistersAmount;
+      setSize = {
+        principals = principals_set.size();
+        hashes = hashes_set.size();
+      };
       size = {
         total = totalSize;
         min = minSize;
