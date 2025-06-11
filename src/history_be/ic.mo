@@ -32,7 +32,7 @@ module {
     module_hash : Blob;
   };
 
-  type CanisterInstallMode = {
+  public type CanisterInstallMode = {
     #reinstall;
     #upgrade;
     #install;
@@ -42,7 +42,7 @@ module {
     controllers : [Principal];
   };
 
-  type SnapshotRecord = {
+  public type SnapshotRecord = {
     canister_version : Nat64;
     snapshot_id : Blob;
     taken_at_timestamp : Nat64;
