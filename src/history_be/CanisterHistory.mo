@@ -142,7 +142,6 @@ module {
       var description : Text;
       var latest_update_timestamp : Nat64;
     };
-    canister_id : Principal;
   };
 
   public type CanisterChangesResponse = {
@@ -152,7 +151,7 @@ module {
     sync_version : Nat;
   };
 
-  public func new(canister_id : Principal) : History = {
+  public func new() : History = {
     changes = List.empty<StableExtendedChange>();
     var latest_change_timestamp = 0;
     var total_num_changes = 0;
@@ -163,7 +162,6 @@ module {
       var description = "";
       var latest_update_timestamp = 0;
     };
-    canister_id;
   };
 
   let ic = actor "aaaaa-aa" : IC.Management;
@@ -173,10 +171,10 @@ module {
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
   ) {
 
-    public func sync() : async* IC.CanisterInfoResponse {
+    public func sync(canister_id : Principal) : async* IC.CanisterInfoResponse {
       // no try-catch => async errors are passed through to the caller
       let info = await ic.canister_info({
-        canister_id = state.canister_id;
+        canister_id = canister_id;
         num_requested_changes = ?20;
       });
       let changes_size = info.recent_changes.size();

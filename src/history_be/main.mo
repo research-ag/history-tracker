@@ -131,13 +131,6 @@ actor class HistoryTracker() = self {
     case (?d) storage_map.unshare(d);
     case (null) {};
   };
-  if (storage_map.size() == 0) {
-    for (h in List.values(history_storage)) {
-      ignore storage_map.put(h.canister_id);
-    };
-  } else if (storage_map.size() != List.size(history_storage)) {
-    Prim.trap("Storage map out of sync");
-  };
 
   /// Global storage of principals, which are presented in changes list. In the history items we store only index of the entry in the ordered set
   var principals_set : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(32, PB.toBlob, PB.toPrincipal);
@@ -218,7 +211,7 @@ actor class HistoryTracker() = self {
   // Resetting them to 0 makes it easier to interpret Grafana
   var trapsDetected = 0;
 
-  let backlog = Queue.empty<CanisterHistory.History>();
+  let backlog = Queue.empty<Nat>();
 
   // PromTracker
   let pt = PT.PromTracker("", 65);
@@ -351,7 +344,6 @@ actor class HistoryTracker() = self {
     };
 
     func freezeHistory(h : CanisterHistory.History) : {
-      canister_id : Principal;
       latest_change_timestamp : Nat64;
       changes : {
         blocks : [[?CanisterHistory.StableExtendedChange]];
@@ -440,9 +432,9 @@ actor class HistoryTracker() = self {
 
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
     if (storage_map.has(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
-    let new_canister_history = CanisterHistory.new(canister_id);
+    let new_canister_history = CanisterHistory.new();
     try {
-      ignore await* CanisterHistory.API(new_canister_history, principals_set, hashes_set).sync();
+      ignore await* CanisterHistory.API(new_canister_history, principals_set, hashes_set).sync(canister_id);
     } catch (e) {
       return #err(track_error(e));
     };
@@ -483,17 +475,19 @@ actor class HistoryTracker() = self {
     };
   };
 
-  func callItem(h : CanisterHistory.History) : async () {
+  func callItem(canisterIdx : Nat) : async () {
+    let h = List.get(history_storage, canisterIdx);
+    let ?canisterId = storage_map.get(canisterIdx) else Prim.trap("Can never happen!");
     let start_time = Time.now();
     pt_syncAttempts.add(1);
     open_calls += 1;
     try {
-      let info = await* CanisterHistory.API(h, principals_set, hashes_set).sync();
+      let info = await* CanisterHistory.API(h, principals_set, hashes_set).sync(canisterId);
       pt_changesPerSync.update(info.recent_changes.size());
       pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
     } catch (e) {
       switch (Error.code(e)) {
-        case (#system_transient or #system_unknown) Queue.pushBack(backlog, h);
+        case (#system_transient or #system_unknown) Queue.pushBack(backlog, canisterIdx);
         case (_) {}; // canister was deleted, skip it
       };
       pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
@@ -515,9 +509,9 @@ actor class HistoryTracker() = self {
     // process backlog first
     label l while (callsToSpawn > 0) {
       switch (Queue.peekFront(backlog)) {
-        case (?h) {
+        case (?idx) {
           try {
-            ignore callItem(h);
+            ignore callItem(idx);
             spawnedCalls += 1;
           } catch (_) {
             pt_spawnedCalls.update(spawnedCalls);
@@ -553,7 +547,7 @@ actor class HistoryTracker() = self {
       let canistersToCall = RoundRobin.roundRobinCollect(dataSources, callsToSpawn, ?Nat.equal);
       label l for ((sourceIdx, canisterIdx) in canistersToCall) {
         try {
-          ignore callItem(List.get(history_storage, canisterIdx));
+          ignore callItem(canisterIdx);
           spawnedCalls += 1;
         } catch (_) {
           // revert ctr increment in the data source
@@ -669,9 +663,9 @@ actor class HistoryTracker() = self {
       if (storage_map.has(id)) {
         return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
       };
-      let newCanisterHistory = CanisterHistory.new(id);
+      let newCanisterHistory = CanisterHistory.new();
       try {
-        ignore await* CanisterHistory.API(newCanisterHistory, principals_set, hashes_set).sync();
+        ignore await* CanisterHistory.API(newCanisterHistory, principals_set, hashes_set).sync(id);
       } catch (err) {
         return #err(track_error(err));
       };
