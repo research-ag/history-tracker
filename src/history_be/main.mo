@@ -21,11 +21,16 @@ import Queue "mo:new-base/Queue";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
 
-import Http "tiny_http";
-import CanisterHistory "CanisterHistory";
-import RoundRobin "round_robin";
-import PB "principal_blob";
-import StableOrderedSet "stable_ordered_set";
+import Task "models/task";
+import StableOrderedSet "models/stable_ordered_set";
+
+import Http "utils/tiny_http";
+import RoundRobin "utils/round_robin";
+import PB "utils/principal_blob";
+
+import History "history";
+import Metadata "history/metadata";
+import ExtendedChange "history/extended_change";
 
 actor class HistoryTracker() = self {
 
@@ -40,65 +45,6 @@ actor class HistoryTracker() = self {
     public type UpdateMetadata = {
       #CanisterNotTracked : { message : Text };
     };
-  };
-
-  module Task {
-    public type TaskState = {
-      alias : Text;
-      var roundsInterval : Nat64;
-      var roundStart : Nat64;
-      var lastRoundCompletedAt : Nat64;
-      var lastRoundDuration : Nat64;
-    };
-
-    // common interface
-    public type Task = {
-      alias : Text;
-      dataSource : RoundRobin.RoundRobinSource<Nat>;
-      var roundsInterval : Nat64;
-      var roundStart : Nat64;
-      var lastRoundCompletedAt : Nat64;
-      var lastRoundDuration : Nat64;
-      metrics : {
-        var roundDurationGauge : ?PT.GaugeValue;
-      };
-    };
-    public func newTask(state : TaskState, dataSource : RoundRobin.RoundRobinSource<Nat>) : Task = {
-      alias = state.alias;
-      dataSource;
-      var roundsInterval = state.roundsInterval;
-      var roundStart = state.roundStart;
-      var lastRoundCompletedAt = state.lastRoundCompletedAt;
-      var lastRoundDuration = state.lastRoundDuration;
-      metrics = {
-        var roundDurationGauge = null;
-      };
-    };
-
-    // sub-interface
-    public type BufferTask = {
-      alias : Text;
-      dataSource : RoundRobin.RoundRobinBuffer<Nat>;
-      var roundsInterval : Nat64;
-      var roundStart : Nat64;
-      var lastRoundCompletedAt : Nat64;
-      var lastRoundDuration : Nat64;
-      metrics : {
-        var roundDurationGauge : ?PT.GaugeValue;
-      };
-    };
-    public func newBufferTask(state : TaskState, dataSource : RoundRobin.RoundRobinBuffer<Nat>) : BufferTask = {
-      alias = state.alias;
-      dataSource;
-      var roundsInterval = state.roundsInterval;
-      var roundStart = state.roundStart;
-      var lastRoundCompletedAt = state.lastRoundCompletedAt;
-      var lastRoundDuration = state.lastRoundDuration;
-      metrics = {
-        var roundDurationGauge = null;
-      };
-    };
-
   };
 
   type TrackingBuckets = {
@@ -122,7 +68,7 @@ actor class HistoryTracker() = self {
   /// Number of canisters that are synchronized per iteration.
   var canisters_num_to_sync = 100;
 
-  stable let history_storage = List.empty<CanisterHistory.History>();
+  stable let history_storage = List.empty<History.History>();
 
   /// Maps the canister id to the history instance index in the storage.
   var storage_map : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(32, PB.toBlob, PB.toPrincipal);
@@ -149,7 +95,7 @@ actor class HistoryTracker() = self {
   };
 
   /// A storage for metadata
-  stable var metadata_map : Map.Map<Nat, CanisterHistory.Metadata> = Map.empty();
+  stable var metadata_map : Map.Map<Nat, Metadata.Metadata> = Map.empty();
 
   /// Main task which loops over all of the canisters
   stable var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
@@ -192,8 +138,8 @@ actor class HistoryTracker() = self {
     sum;
   };
 
-  func get_history(canister_id : Principal) : ?CanisterHistory.History {
-    Option.map<Nat, CanisterHistory.History>(
+  func get_history(canister_id : Principal) : ?History.History {
+    Option.map<Nat, History.History>(
       storage_map.indexOf(canister_id),
       func(i) = List.get(history_storage, i),
     );
@@ -346,10 +292,10 @@ actor class HistoryTracker() = self {
       return null;
     };
 
-    func freezeHistory(h : CanisterHistory.History) : {
+    func freezeHistory(h : History.History) : {
       latest_change_timestamp : Nat64;
       changes : {
-        blocks : [[?CanisterHistory.StableExtendedChange]];
+        blocks : [[?ExtendedChange.StableExtendedChange]];
         blockIndex : Nat;
         elementIndex : Nat;
       };
@@ -359,7 +305,7 @@ actor class HistoryTracker() = self {
     } = {
       h with
       changes = {
-        blocks = Array.map<[var ?CanisterHistory.StableExtendedChange], [?CanisterHistory.StableExtendedChange]>(
+        blocks = Array.map<[var ?ExtendedChange.StableExtendedChange], [?ExtendedChange.StableExtendedChange]>(
           Array.freeze(h.changes.blocks),
           func(x) = Array.freeze(x),
         );
@@ -425,9 +371,9 @@ actor class HistoryTracker() = self {
 
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
     if (storage_map.has(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
-    let new_canister_history = CanisterHistory.new();
+    let new_canister_history = History.new();
     try {
-      ignore await* CanisterHistory.API(new_canister_history, principals_set, hashes_set).sync(canister_id);
+      ignore await* History.sync(canister_id, new_canister_history, principals_set, hashes_set);
     } catch (e) {
       return #err(track_error(e));
     };
@@ -439,17 +385,17 @@ actor class HistoryTracker() = self {
     #ok();
   };
 
-  public query func canister_changes(canister_id : Principal) : async ?CanisterHistory.CanisterChangesResponse {
-    Option.map<CanisterHistory.History, CanisterHistory.CanisterChangesResponse>(
+  public query func canister_changes(canister_id : Principal) : async ?History.CanisterChangesResponse {
+    Option.map<History.History, History.CanisterChangesResponse>(
       get_history(canister_id),
-      func(h) = CanisterHistory.API(h, principals_set, hashes_set).canister_changes(),
+      func(h) = History.canister_changes(h, principals_set, hashes_set),
     );
   };
 
-  public query func metadata(canister_id : Principal) : async ?CanisterHistory.SharedMetadata {
+  public query func metadata(canister_id : Principal) : async ?Metadata.SharedMetadata {
     let ?idx = storage_map.indexOf(canister_id) else return null;
     let ?md = Map.get(metadata_map, Nat.compare, idx) else return null;
-    ?CanisterHistory.shareMetadata(md);
+    ?Metadata.shareMetadata(md);
   };
 
   public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.UpdateMetadata> {
@@ -463,11 +409,7 @@ actor class HistoryTracker() = self {
     let metadata = switch (Map.get(metadata_map, Nat.compare, idx)) {
       case (?md) md;
       case (null) {
-        let md = {
-          var name = "";
-          var description = "";
-          var latest_update_timestamp = 0 : Nat64;
-        };
+        let md = Metadata.new();
         metadata_map := Map.add(metadata_map, Nat.compare, idx, md);
         md;
       };
@@ -494,7 +436,7 @@ actor class HistoryTracker() = self {
     pt_syncAttempts.add(1);
     open_calls += 1;
     try {
-      let info = await* CanisterHistory.API(h, principals_set, hashes_set).sync(canisterId);
+      let info = await* History.sync(canisterId, h, principals_set, hashes_set);
       pt_changesPerSync.update(info.recent_changes.size());
       pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
     } catch (e) {
@@ -675,9 +617,9 @@ actor class HistoryTracker() = self {
       if (storage_map.has(id)) {
         return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
       };
-      let newCanisterHistory = CanisterHistory.new();
+      let newCanisterHistory = History.new();
       try {
-        ignore await* CanisterHistory.API(newCanisterHistory, principals_set, hashes_set).sync(id);
+        ignore await* History.sync(id, newCanisterHistory, principals_set, hashes_set);
       } catch (err) {
         return #err(track_error(err));
       };

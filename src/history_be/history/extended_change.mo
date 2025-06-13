@@ -1,18 +1,18 @@
 import Array "mo:base/Array";
-import Nat64 "mo:base/Nat64";
-import Principal "mo:base/Principal";
-import List "mo:new-base/List";
 import Prim "mo:prim";
 
 import IC "ic";
-import StableOrderedSet "stable_ordered_set";
+import StableOrderedSet "../models/stable_ordered_set";
 
-module {
+/// A module containing canister change data type and operations on it
+module ExtendedChange {
 
+  /// A change record which we receive from IC and expose
   public type ExtendedChange = IC.CanisterChange and {
     change_index : Nat;
   };
 
+  /// A change record which we store in the memory
   public type StableExtendedChange = {
     change_index : Nat;
     // IC.CanisterChange below  with mapped principals and module hashes to indexes (Nat)
@@ -43,7 +43,7 @@ module {
     };
   };
 
-  func wrapExtendedChange(
+  public func wrapExtendedChange(
     v : ExtendedChange,
     principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
@@ -84,7 +84,7 @@ module {
     };
   };
 
-  func unwrapExtendedChange(
+  public func unwrapExtendedChange(
     v : StableExtendedChange,
     principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
@@ -125,87 +125,4 @@ module {
     };
   };
 
-  public type Metadata = {
-    var name : Text;
-    var description : Text;
-    var latest_update_timestamp : Nat64;
-  };
-
-  public type SharedMetadata = {
-    name : Text;
-    description : Text;
-    latest_update_timestamp : Nat64;
-  };
-
-  public func shareMetadata(md : Metadata) : SharedMetadata = {
-    name = md.name;
-    description = md.description;
-    latest_update_timestamp = md.latest_update_timestamp;
-  };
-
-  public type History = {
-    changes : List.List<StableExtendedChange>; // all tracked changes
-    var latest_change_timestamp : Nat64; // latest tracked change timestamp
-    var total_num_changes : Nat64; // total number of changes
-    var timestamp_nanos : Nat64; // latest sync timestamp
-    var sync_version : Nat; // sync version (number of syncs)
-  };
-
-  public type CanisterChangesResponse = {
-    changes : [ExtendedChange];
-    total_num_changes : Nat64;
-    timestamp_nanos : Nat64;
-    sync_version : Nat;
-  };
-
-  public func new() : History = {
-    changes = List.empty<StableExtendedChange>();
-    var latest_change_timestamp = 0;
-    var total_num_changes = 0;
-    var timestamp_nanos = 0;
-    var sync_version = 0;
-  };
-
-  let ic = actor "aaaaa-aa" : IC.Management;
-  public class API(
-    state : History,
-    principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
-    hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
-  ) {
-
-    public func sync(canister_id : Principal) : async* IC.CanisterInfoResponse {
-      // no try-catch => async errors are passed through to the caller
-      let info = await ic.canister_info({
-        canister_id = canister_id;
-        num_requested_changes = ?20;
-      });
-      let changes_size = info.recent_changes.size();
-      var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
-
-      // Merge untracked changes with already saved ones
-      for (change in info.recent_changes.vals()) {
-        if (change.timestamp_nanos > state.latest_change_timestamp) {
-          List.add(
-            state.changes,
-            wrapExtendedChange({ change with change_index = cur_change_index }, principalsSet, hashesSet),
-          );
-          state.latest_change_timestamp := change.timestamp_nanos;
-        };
-        cur_change_index += 1;
-      };
-
-      state.total_num_changes := info.total_num_changes;
-      state.timestamp_nanos := Prim.time();
-      state.sync_version += 1;
-      info;
-    };
-
-    public func canister_changes() : CanisterChangesResponse = {
-      changes = List.toArray(state.changes)
-      |> Array.map<StableExtendedChange, ExtendedChange>(_, func x = unwrapExtendedChange(x, principalsSet, hashesSet));
-      total_num_changes = state.total_num_changes;
-      timestamp_nanos = state.timestamp_nanos;
-      sync_version = state.sync_version;
-    };
-  };
 };
