@@ -2,7 +2,7 @@ import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Prim "mo:prim";
 
-import RoundRobin "../../src/history_be/round_robin";
+import RoundRobin "../../src/history_be/utils/round_robin";
 
 // RoundRobinBuffer<T> has to be a subtype of RoundRobinSource<T> and Iter<T>
 let _ : RoundRobin.RoundRobinSource<Float> = RoundRobin.RoundRobinBuffer<Float>(null);
