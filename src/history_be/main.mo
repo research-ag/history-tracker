@@ -148,6 +148,9 @@ actor class HistoryTracker() = self {
     case (null) {};
   };
 
+  /// A storage for metadata
+  stable var metadata_map : Map.Map<Nat, CanisterHistory.Metadata> = Map.empty();
+
   /// Main task which loops over all of the canisters
   stable var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
     { size = 0; ctr = 0; round = 0 },
@@ -350,11 +353,6 @@ actor class HistoryTracker() = self {
         blockIndex : Nat;
         elementIndex : Nat;
       };
-      metadata : {
-        description : Text;
-        latest_update_timestamp : Nat64;
-        name : Text;
-      };
       sync_version : Nat;
       timestamp_nanos : Nat64;
       total_num_changes : Nat64;
@@ -369,11 +367,6 @@ actor class HistoryTracker() = self {
         elementIndex = h.changes.blockIndex;
       };
       latest_change_timestamp = h.latest_change_timestamp;
-      metadata = {
-        description = h.metadata.description;
-        latest_update_timestamp = h.metadata.latest_update_timestamp;
-        name = h.metadata.name;
-      };
       sync_version = h.sync_version;
       timestamp_nanos = h.timestamp_nanos;
       total_num_changes = h.total_num_changes;
@@ -453,26 +446,45 @@ actor class HistoryTracker() = self {
     );
   };
 
-  public query func metadata(canister_id : Principal) : async ?CanisterHistory.Metadata {
-    Option.map<CanisterHistory.History, CanisterHistory.Metadata>(
-      get_history(canister_id),
-      func(h) = CanisterHistory.API(h, principals_set, hashes_set).metadata(),
-    );
+  public query func metadata(canister_id : Principal) : async ?CanisterHistory.SharedMetadata {
+    let ?idx = storage_map.indexOf(canister_id) else return null;
+    let ?md = Map.get(metadata_map, Nat.compare, idx) else return null;
+    ?CanisterHistory.shareMetadata(md);
   };
 
   public shared ({ caller }) func update_metadata(canister_id : Principal, name : ?Text, description : ?Text) : async Result.Result<(), Errors.UpdateMetadata> {
-    let ?h = get_history(canister_id) else return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
-    let result = await* CanisterHistory.API(h, principals_set, hashes_set).update_metadata(caller, name, description);
-    switch (result) {
-      case true {
-        pt_metadataUpdates.add(1);
-        #ok();
-      };
-      case false {
-        pt_unauthorizedMetadataUpdates.add(1);
-        throw Error.reject("Access denied.");
+    if (not Principal.isController(caller)) {
+      pt_unauthorizedMetadataUpdates.add(1);
+      throw Error.reject("Access denied.");
+    };
+
+    let ?idx = storage_map.indexOf(canister_id) else return #err(#CanisterNotTracked({ message = "The canister is not tracked." }));
+
+    let metadata = switch (Map.get(metadata_map, Nat.compare, idx)) {
+      case (?md) md;
+      case (null) {
+        let md = {
+          var name = "";
+          var description = "";
+          var latest_update_timestamp = 0 : Nat64;
+        };
+        metadata_map := Map.add(metadata_map, Nat.compare, idx, md);
+        md;
       };
     };
+
+    switch (name) {
+      case null {};
+      case (?value) metadata.name := value;
+    };
+    switch (description) {
+      case null {};
+      case (?value) metadata.description := value;
+    };
+    metadata.latest_update_timestamp := Prim.time();
+
+    pt_metadataUpdates.add(1);
+    #ok();
   };
 
   func callItem(canisterIdx : Nat) : async () {

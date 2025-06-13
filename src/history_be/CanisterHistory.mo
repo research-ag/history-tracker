@@ -126,9 +126,21 @@ module {
   };
 
   public type Metadata = {
+    var name : Text;
+    var description : Text;
+    var latest_update_timestamp : Nat64;
+  };
+
+  public type SharedMetadata = {
     name : Text;
     description : Text;
     latest_update_timestamp : Nat64;
+  };
+
+  public func shareMetadata(md : Metadata) : SharedMetadata = {
+    name = md.name;
+    description = md.description;
+    latest_update_timestamp = md.latest_update_timestamp;
   };
 
   public type History = {
@@ -137,11 +149,6 @@ module {
     var total_num_changes : Nat64; // total number of changes
     var timestamp_nanos : Nat64; // latest sync timestamp
     var sync_version : Nat; // sync version (number of syncs)
-    var metadata : {
-      var name : Text;
-      var description : Text;
-      var latest_update_timestamp : Nat64;
-    };
   };
 
   public type CanisterChangesResponse = {
@@ -157,11 +164,6 @@ module {
     var total_num_changes = 0;
     var timestamp_nanos = 0;
     var sync_version = 0;
-    var metadata = {
-      var name = "";
-      var description = "";
-      var latest_update_timestamp = 0;
-    };
   };
 
   let ic = actor "aaaaa-aa" : IC.Management;
@@ -204,35 +206,6 @@ module {
       total_num_changes = state.total_num_changes;
       timestamp_nanos = state.timestamp_nanos;
       sync_version = state.sync_version;
-    };
-
-    public func metadata() : Metadata {
-      {
-        name = state.metadata.name;
-        description = state.metadata.description;
-        latest_update_timestamp = state.metadata.latest_update_timestamp;
-      };
-    };
-
-    public func update_metadata(caller : Principal, name : ?Text, description : ?Text) : async* Bool {
-      if (not Principal.isController(caller)) return false;
-
-      switch (name) {
-        case null {};
-        case (?value) {
-          state.metadata.name := value;
-        };
-      };
-
-      switch (description) {
-        case null {};
-        case (?value) {
-          state.metadata.description := value;
-        };
-      };
-
-      state.metadata.latest_update_timestamp := Prim.time();
-      return true;
     };
   };
 };
