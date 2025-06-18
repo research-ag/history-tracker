@@ -23,6 +23,7 @@ import PT "mo:promtracker";
 
 import Task "models/task";
 import StableOrderedSet "models/stable_ordered_set";
+import StableBucketList "models/stable_bucket_list";
 
 import Http "utils/tiny_http";
 import RoundRobin "utils/round_robin";
@@ -30,7 +31,6 @@ import PB "utils/principal_blob";
 
 import History "history";
 import Metadata "history/metadata";
-import ExtendedChange "history/extended_change";
 
 actor class HistoryTracker() = self {
 
@@ -69,6 +69,9 @@ actor class HistoryTracker() = self {
   var canisters_num_to_sync = 100;
 
   stable let history_storage = List.empty<History.History>();
+
+  // A changes lists. Bucket index == history index in the storage
+  stable let changes : StableBucketList.StableBucketList = StableBucketList.new();
 
   /// Maps the canister id to the history instance index in the storage.
   var storage_map : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(32, PB.toBlob, PB.toPrincipal);
@@ -136,13 +139,6 @@ actor class HistoryTracker() = self {
       sum += tracking_buckets.buckets[get_bucket_index(i)];
     };
     sum;
-  };
-
-  func get_history(canister_id : Principal) : ?History.History {
-    Option.map<Nat, History.History>(
-      storage_map.indexOf(canister_id),
-      func(i) = List.get(history_storage, i),
-    );
   };
 
   func insert_id(canister_id : Principal) : Bool {
@@ -294,24 +290,10 @@ actor class HistoryTracker() = self {
 
     func freezeHistory(h : History.History) : {
       latest_change_timestamp : Nat64;
-      changes : {
-        blocks : [[?ExtendedChange.StableExtendedChange]];
-        blockIndex : Nat;
-        elementIndex : Nat;
-      };
       sync_version : Nat;
       timestamp_nanos : Nat64;
       total_num_changes : Nat64;
     } = {
-      h with
-      changes = {
-        blocks = Array.map<[var ?ExtendedChange.StableExtendedChange], [?ExtendedChange.StableExtendedChange]>(
-          Array.freeze(h.changes.blocks),
-          func(x) = Array.freeze(x),
-        );
-        blockIndex = h.changes.blockIndex;
-        elementIndex = h.changes.blockIndex;
-      };
       latest_change_timestamp = h.latest_change_timestamp;
       sync_version = h.sync_version;
       timestamp_nanos = h.timestamp_nanos;
@@ -324,11 +306,12 @@ actor class HistoryTracker() = self {
     var minChanges = 1_000_000_000_000;
     var maxChanges = 0;
     var totalChanges = 0;
-    for (h in List.values(history_storage)) {
-      let changes = List.size(h.changes);
-      minChanges := Nat.min(minChanges, changes);
-      maxChanges := Nat.max(maxChanges, changes);
-      totalChanges += changes;
+    for (i in List.keys(history_storage)) {
+      let h = List.get(history_storage, i);
+      let changesSize = StableBucketList.size(changes, Nat64.fromNat(i)) |> Nat64.toNat(_);
+      minChanges := Nat.min(minChanges, changesSize);
+      maxChanges := Nat.max(maxChanges, changesSize);
+      totalChanges += changesSize;
       let size = to_candid (freezeHistory(h)) |> _.size();
       minSize := Nat.min(minSize, size);
       maxSize := Nat.max(maxSize, size);
@@ -371,13 +354,13 @@ actor class HistoryTracker() = self {
 
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
     if (storage_map.has(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
+    let new_index : Nat = List.size(history_storage);
     let new_canister_history = History.new();
     try {
-      ignore await* History.sync(canister_id, new_canister_history, principals_set, hashes_set);
+      ignore await* History.sync(canister_id, new_canister_history, new_index, principals_set, hashes_set, changes);
     } catch (e) {
       return #err(track_error(e));
     };
-    let new_index : Nat = List.size(history_storage);
     List.add(history_storage, new_canister_history);
     allCanistersTaskDataSource.setSize(new_index + 1);
     record_new_track();
@@ -386,9 +369,9 @@ actor class HistoryTracker() = self {
   };
 
   public query func canister_changes(canister_id : Principal) : async ?History.CanisterChangesResponse {
-    Option.map<History.History, History.CanisterChangesResponse>(
-      get_history(canister_id),
-      func(h) = History.canister_changes(h, principals_set, hashes_set),
+    Option.map<Nat, History.CanisterChangesResponse>(
+      storage_map.indexOf(canister_id),
+      func(i) = History.canister_changes(List.get(history_storage, i), i, principals_set, hashes_set, changes),
     );
   };
 
@@ -436,7 +419,7 @@ actor class HistoryTracker() = self {
     pt_syncAttempts.add(1);
     open_calls += 1;
     try {
-      let info = await* History.sync(canisterId, h, principals_set, hashes_set);
+      let info = await* History.sync(canisterId, h, canisterIdx, principals_set, hashes_set, changes);
       pt_changesPerSync.update(info.recent_changes.size());
       pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
     } catch (e) {
@@ -617,16 +600,16 @@ actor class HistoryTracker() = self {
       if (storage_map.has(id)) {
         return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
       };
+      let new_index : Nat = List.size(history_storage);
       let newCanisterHistory = History.new();
       try {
-        ignore await* History.sync(id, newCanisterHistory, principals_set, hashes_set);
+        ignore await* History.sync(id, newCanisterHistory, new_index, principals_set, hashes_set, changes);
       } catch (err) {
         return #err(track_error(err));
       };
       if (storage_map.has(id)) {
         return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
       };
-      let new_index : Nat = List.size(history_storage);
       List.add(history_storage, newCanisterHistory);
       record_new_track();
       allCanistersTaskDataSource.setSize(new_index + 1);

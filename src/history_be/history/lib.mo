@@ -1,18 +1,18 @@
-import Array "mo:base/Array";
+import Iter "mo:base/Iter";
 import Nat64 "mo:base/Nat64";
+import Option "mo:base/Option";
 import Principal "mo:base/Principal";
-import List "mo:new-base/List";
 import Prim "mo:prim";
 
 import ExtendedChange "extended_change";
 
 import IC "ic";
 import StableOrderedSet "../models/stable_ordered_set";
+import StableBucketList "../models/stable_bucket_list";
 
 module History {
 
   public type History = {
-    changes : List.List<ExtendedChange.StableExtendedChange>; // all tracked changes
     var latest_change_timestamp : Nat64; // latest tracked change timestamp
     var total_num_changes : Nat64; // total number of changes
     var timestamp_nanos : Nat64; // latest sync timestamp
@@ -20,7 +20,6 @@ module History {
   };
 
   public func new() : History = {
-    changes = List.empty<ExtendedChange.StableExtendedChange>();
     var latest_change_timestamp = 0;
     var total_num_changes = 0;
     var timestamp_nanos = 0;
@@ -39,8 +38,10 @@ module History {
   public func sync(
     canister_id : Principal,
     history : History,
+    historyIndex : Nat,
     principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
+    changes : StableBucketList.StableBucketList,
   ) : async* IC.CanisterInfoResponse {
     // no try-catch => async errors are passed through to the caller
     let info = await ic.canister_info({
@@ -53,9 +54,11 @@ module History {
     // Merge untracked changes with already saved ones
     for (change in info.recent_changes.vals()) {
       if (change.timestamp_nanos > history.latest_change_timestamp) {
-        List.add(
-          history.changes,
+        StableBucketList.append(
+          changes,
+          Nat64.fromNat(historyIndex),
           ExtendedChange.wrapExtendedChange({ change with change_index = cur_change_index }, principalsSet, hashesSet),
+          ExtendedChange.changesListOps,
         );
         history.latest_change_timestamp := change.timestamp_nanos;
       };
@@ -70,11 +73,23 @@ module History {
 
   public func canister_changes(
     history : History,
+    historyIndex : Nat,
     principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
+    changes : StableBucketList.StableBucketList,
   ) : CanisterChangesResponse = {
-    changes = List.toArray(history.changes)
-    |> Array.map<ExtendedChange.StableExtendedChange, ExtendedChange.ExtendedChange>(_, func x = ExtendedChange.unwrapExtendedChange(x, principalsSet, hashesSet));
+
+    changes = StableBucketList.values(changes, Nat64.fromNat(historyIndex), ExtendedChange.changesListOps)
+    |> Iter.filter<?ExtendedChange.StableExtendedChange>(_, func(x) = Option.isSome(x))
+    |> Iter.map<?ExtendedChange.StableExtendedChange, ExtendedChange.ExtendedChange>(
+      _,
+      func(xopt) {
+        let ?x = xopt else Prim.trap("Can never happen");
+        ExtendedChange.unwrapExtendedChange(x, principalsSet, hashesSet);
+      },
+    )
+    |> Iter.toArray(_);
+
     total_num_changes = history.total_num_changes;
     timestamp_nanos = history.timestamp_nanos;
     sync_version = history.sync_version;

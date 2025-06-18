@@ -3,9 +3,15 @@ import Prim "mo:prim";
 
 import IC "ic";
 import StableOrderedSet "../models/stable_ordered_set";
+import StableBucketList "../models/stable_bucket_list";
 
 /// A module containing canister change data type and operations on it
 module ExtendedChange {
+
+  public let changesListOps : StableBucketList.TypedStableBucketListOps<ExtendedChange.StableExtendedChange> = {
+    serialize = func(data : ExtendedChange.StableExtendedChange) : Blob = to_candid (data);
+    deserialize = func(raw : Blob) : ?ExtendedChange.StableExtendedChange = from_candid (raw);
+  };
 
   /// A change record which we receive from IC and expose
   public type ExtendedChange = IC.CanisterChange and {
