@@ -1,9 +1,10 @@
 import Blob "mo:base/Blob";
+import Float "mo:base/Float";
+import Iter "mo:base/Iter";
 import Nat16 "mo:base/Nat16";
 import Nat64 "mo:base/Nat64";
-import Region "mo:base/Region";
-import Iter "mo:base/Iter";
 import Prim "mo:prim";
+import Region "mo:base/Region";
 
 /// This module implements an array of linked lists, fully stored in regions.
 /// We name each linked list as "bucket" internally.
@@ -40,7 +41,7 @@ import Prim "mo:prim";
 /// |--------|-------|-----------------------------------------------------------------------------|
 /// | 0      | Nat16 | A size of blob with actual record data                                      |
 /// | 2      | Nat64 | A pointer in data region where previous item of the given bucket is located |
-/// | 10     | Nat64 | A pointer in data region where previous item of the given bucket is located |
+/// | 10     | Nat64 | A pointer in data region where next item of the given bucket is located     |
 /// | 18     | Blob  | An actual record data                                                       |
 module {
 
@@ -116,6 +117,31 @@ module {
         ptr := prevPtr;
         ?data;
       };
+    };
+  };
+
+  public func memoryStats(l : StableBucketList) : {
+    pages : { indexTable : Nat64; data : Nat64 };
+    bytesUsed : Nat64;
+    totalRecords : Nat;
+    avgRecordSize : Float;
+  } {
+    let tailPtr = _loadDataTailPtr(l);
+    var totalRecords = 0;
+    var ptr = DATA_HEADER_SIZE;
+    while (ptr < tailPtr) {
+      ptr += 18 + Region.loadNat16(l.data, ptr) |> Nat64.fromNat(Nat16.toNat(_));
+      totalRecords += 1;
+    };
+
+    {
+      pages = {
+        indexTable = Region.size(l.indexTable);
+        data = Region.size(l.data);
+      };
+      bytesUsed = tailPtr;
+      totalRecords;
+      avgRecordSize = Float.fromInt(Nat64.toNat(tailPtr)) / Float.fromInt(totalRecords);
     };
   };
 

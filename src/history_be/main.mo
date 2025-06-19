@@ -282,6 +282,12 @@ actor class HistoryTracker() = self {
       max : Nat;
       average : Float;
     };
+    changeBucketListStats : {
+      pages : { indexTable : Nat64; data : Nat64 };
+      bytesUsed : Nat64;
+      totalRecords : Nat;
+      avgRecordSize : Float;
+    };
   } {
     let canistersAmount = List.size(history_storage);
     if (canistersAmount == 0) {
@@ -335,6 +341,7 @@ actor class HistoryTracker() = self {
         max = maxChanges;
         average = Float.fromInt(totalChanges) / Float.fromInt(canistersAmount);
       };
+      changeBucketListStats = StableBucketList.memoryStats(changes);
     };
   };
 
