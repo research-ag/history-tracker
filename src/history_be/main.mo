@@ -186,7 +186,7 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("tracked_24h", "", func() = sum_buckets(DAY_HOURS));
   ignore pt.addPullValue("tracked_7d", "", func() = sum_buckets(WEEK_HOURS));
   ignore pt.addPullValue("tracked_30d", "", func() = sum_buckets(MONTH_HOURS));
-  ignore pt.addPullValue("num_changes_total", "", func() = StableBucketList.totalSize(changes));
+  ignore pt.addPullValue("num_changes_total", "", func() = StableBucketList.totalSize(changes) |> Nat64.toNat(_));
   ignore pt.addPullValue("changes_region_bytes_used", "", func() = StableBucketList.memoryStats(changes).bytesUsed |> Nat64.toNat(_));
 
   func registerTaskMetrics(task : Task.Task) {
@@ -287,7 +287,7 @@ actor class HistoryTracker() = self {
     changeBucketListStats : {
       pages : { indexTable : Nat64; data : Nat64 };
       bytesUsed : Nat64;
-      totalRecords : Nat;
+      totalRecords : Nat64;
       avgRecordSize : Float;
     };
   } {
@@ -349,7 +349,7 @@ actor class HistoryTracker() = self {
         csm with
         totalRecords = cts;
         avgRecordSize = if (cts > 0) {
-          Float.fromInt(Nat64.toNat(csm.bytesUsed)) / Float.fromInt(cts);
+          Float.fromInt(Nat64.toNat(csm.bytesUsed)) / Float.fromInt(Nat64.toNat(cts));
         } else { 0.0 };
       };
     };
@@ -358,9 +358,12 @@ actor class HistoryTracker() = self {
   // public func resetLastChangeTimestamp() : async () {
   //   for (i in List.keys(history_storage)) {
   //     let h = List.get(history_storage, i);
-  //     let lastChange = StableBucketList.valuesRev<ExtendedChange.StableExtendedChange>(changes, Nat64.fromNat(i), ExtendedChange.changesListOps).next();
+  //     let lastChange = StableBucketList.valuesRev(changes, Nat64.fromNat(i)).next();
   //     h.latest_change_timestamp := switch (lastChange) {
-  //       case (??c) c.timestamp_nanos;
+  //       case (?b) switch (ExtendedChange.deserializeExtendedChange(b, principals_set, hashes_set)) {
+  //         case (?c) c.timestamp_nanos;
+  //         case (_) 0;
+  //       };
   //       case (_) 0;
   //     };
   //   };
@@ -383,6 +386,9 @@ actor class HistoryTracker() = self {
   public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
     if (storage_map.has(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_index : Nat = List.size(history_storage);
+    while (changes.bucketsAllocated <= Nat64.fromNat(new_index)) {
+      ignore StableBucketList.allocateBucket(changes);
+    };
     let new_canister_history = History.new();
     try {
       ignore await* History.sync(canister_id, new_canister_history, new_index, principals_set, hashes_set, changes);
@@ -630,6 +636,9 @@ actor class HistoryTracker() = self {
       };
       let new_index : Nat = List.size(history_storage);
       let newCanisterHistory = History.new();
+      while (changes.bucketsAllocated <= Nat64.fromNat(new_index)) {
+        ignore StableBucketList.allocateBucket(changes);
+      };
       try {
         ignore await* History.sync(id, newCanisterHistory, new_index, principals_set, hashes_set, changes);
       } catch (err) {

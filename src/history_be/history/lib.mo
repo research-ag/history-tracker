@@ -57,8 +57,7 @@ module History {
         StableBucketList.append(
           changes,
           Nat64.fromNat(historyIndex),
-          ExtendedChange.wrapExtendedChange({ change with change_index = cur_change_index }, principalsSet, hashesSet),
-          ExtendedChange.changesListOps,
+          ExtendedChange.serializeExtendedChange({ change with change_index = cur_change_index }, principalsSet, hashesSet),
         );
         history.latest_change_timestamp := change.timestamp_nanos;
       };
@@ -79,13 +78,14 @@ module History {
     changes : StableBucketList.StableBucketList,
   ) : CanisterChangesResponse = {
 
-    changes = StableBucketList.values(changes, Nat64.fromNat(historyIndex), ExtendedChange.changesListOps)
-    |> Iter.filter<?ExtendedChange.StableExtendedChange>(_, func(x) = Option.isSome(x))
-    |> Iter.map<?ExtendedChange.StableExtendedChange, ExtendedChange.ExtendedChange>(
+    changes = StableBucketList.values(changes, Nat64.fromNat(historyIndex))
+    |> Iter.map<Blob, ?ExtendedChange.ExtendedChange>(_, func(b) = ExtendedChange.deserializeExtendedChange(b, principalsSet, hashesSet))
+    |> Iter.filter<?ExtendedChange.ExtendedChange>(_, func(x) = Option.isSome(x))
+    |> Iter.map<?ExtendedChange.ExtendedChange, ExtendedChange.ExtendedChange>(
       _,
       func(xopt) {
         let ?x = xopt else Prim.trap("Can never happen");
-        ExtendedChange.unwrapExtendedChange(x, principalsSet, hashesSet);
+        x;
       },
     )
     |> Iter.toArray(_);

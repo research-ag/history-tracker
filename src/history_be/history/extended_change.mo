@@ -3,15 +3,9 @@ import Prim "mo:prim";
 
 import IC "ic";
 import StableOrderedSet "../models/stable_ordered_set";
-import StableBucketList "../models/stable_bucket_list";
 
 /// A module containing canister change data type and operations on it
 module ExtendedChange {
-
-  public let changesListOps : StableBucketList.TypedStableBucketListOps<ExtendedChange.StableExtendedChange> = {
-    serialize = func(data : ExtendedChange.StableExtendedChange) : Blob = to_candid (data);
-    deserialize = func(raw : Blob) : ?ExtendedChange.StableExtendedChange = from_candid (raw);
-  };
 
   /// A change record which we receive from IC and expose
   public type ExtendedChange = IC.CanisterChange and {
@@ -49,11 +43,11 @@ module ExtendedChange {
     };
   };
 
-  public func wrapExtendedChange(
+  public func serializeExtendedChange(
     v : ExtendedChange,
     principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
-  ) : StableExtendedChange {
+  ) : Blob {
     func mapPrincipal(p : Principal) : Nat {
       let (idx, _) = principalsSet.put(p);
       idx;
@@ -62,7 +56,7 @@ module ExtendedChange {
       let (idx, _) = hashesSet.put(hash);
       idx;
     };
-    return {
+    let change : StableExtendedChange = {
       v with
       origin = switch (v.origin) {
         case (#from_user { user_id }) #from_user({
@@ -88,13 +82,16 @@ module ExtendedChange {
         case (#load_snapshot x) #load_snapshot(x);
       };
     };
+    to_candid (change);
   };
 
-  public func unwrapExtendedChange(
-    v : StableExtendedChange,
+  public func deserializeExtendedChange(
+    raw : Blob,
     principalsSet : StableOrderedSet.StableOrderedSet<Principal>,
     hashesSet : StableOrderedSet.StableOrderedSet<Blob>,
-  ) : ExtendedChange {
+  ) : ?ExtendedChange {
+    let ?v : ?ExtendedChange.StableExtendedChange = from_candid (raw) else return null;
+
     func mapPrincipal(index : Nat) : Principal {
       let ?p = principalsSet.get(index) else Prim.trap("mapPrincipal failed!");
       p;
@@ -103,7 +100,8 @@ module ExtendedChange {
       let ?p = hashesSet.get(index) else Prim.trap("mapHash failed!");
       p;
     };
-    return {
+
+    ?{
       v with
       origin = switch (v.origin) {
         case (#from_user { user_id_index }) #from_user({
