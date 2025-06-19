@@ -1,5 +1,4 @@
 import Blob "mo:base/Blob";
-import Float "mo:base/Float";
 import Iter "mo:base/Iter";
 import Nat16 "mo:base/Nat16";
 import Nat64 "mo:base/Nat64";
@@ -76,6 +75,17 @@ module {
 
   public func size(l : StableBucketList, bucketIndex : Nat64) : Nat64 = _loadListLength(l, bucketIndex);
 
+  public func totalSize(l : StableBucketList) : Nat {
+    let tailPtr = _loadDataTailPtr(l);
+    var totalRecords = 0;
+    var ptr = DATA_HEADER_SIZE;
+    while (ptr < tailPtr) {
+      ptr += 18 + Region.loadNat16(l.data, ptr) |> Nat64.fromNat(Nat16.toNat(_));
+      totalRecords += 1;
+    };
+    totalRecords;
+  };
+
   public func append<T>(l : StableBucketList, bucketIndex : Nat64, data : T, ops : TypedStableBucketListOps<T>) {
     if (bucketIndex > MAX_BUCKET_INDEX) {
       Prim.trap("Bucket index is too high");
@@ -123,26 +133,12 @@ module {
   public func memoryStats(l : StableBucketList) : {
     pages : { indexTable : Nat64; data : Nat64 };
     bytesUsed : Nat64;
-    totalRecords : Nat;
-    avgRecordSize : Float;
-  } {
-    let tailPtr = _loadDataTailPtr(l);
-    var totalRecords = 0;
-    var ptr = DATA_HEADER_SIZE;
-    while (ptr < tailPtr) {
-      ptr += 18 + Region.loadNat16(l.data, ptr) |> Nat64.fromNat(Nat16.toNat(_));
-      totalRecords += 1;
+  } = {
+    pages = {
+      indexTable = Region.size(l.indexTable);
+      data = Region.size(l.data);
     };
-
-    {
-      pages = {
-        indexTable = Region.size(l.indexTable);
-        data = Region.size(l.data);
-      };
-      bytesUsed = tailPtr;
-      totalRecords;
-      avgRecordSize = Float.fromInt(Nat64.toNat(tailPtr)) / Float.fromInt(totalRecords);
-    };
+    bytesUsed = _loadDataTailPtr(l);
   };
 
   // ======================== INTERNAL PRIVATE FUNCTIONALITY ========================

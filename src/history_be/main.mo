@@ -186,6 +186,8 @@ actor class HistoryTracker() = self {
   ignore pt.addPullValue("tracked_24h", "", func() = sum_buckets(DAY_HOURS));
   ignore pt.addPullValue("tracked_7d", "", func() = sum_buckets(WEEK_HOURS));
   ignore pt.addPullValue("tracked_30d", "", func() = sum_buckets(MONTH_HOURS));
+  ignore pt.addPullValue("num_changes_total", "", func() = StableBucketList.totalSize(changes));
+  ignore pt.addPullValue("changes_region_bytes_used", "", func() = StableBucketList.memoryStats(changes).bytesUsed |> Nat64.toNat(_));
 
   func registerTaskMetrics(task : Task.Task) {
     let lbl = "task=\"" # task.alias # "\"";
@@ -323,6 +325,8 @@ actor class HistoryTracker() = self {
       maxSize := Nat.max(maxSize, size);
       totalSize += size;
     };
+    let csm = StableBucketList.memoryStats(changes);
+    let cts = StableBucketList.totalSize(changes);
     ?{
       canistersAmount;
       setSize = {
@@ -341,9 +345,26 @@ actor class HistoryTracker() = self {
         max = maxChanges;
         average = Float.fromInt(totalChanges) / Float.fromInt(canistersAmount);
       };
-      changeBucketListStats = StableBucketList.memoryStats(changes);
+      changeBucketListStats = {
+        csm with
+        totalRecords = cts;
+        avgRecordSize = if (cts > 0) {
+          Float.fromInt(Nat64.toNat(csm.bytesUsed)) / Float.fromInt(cts);
+        } else { 0.0 };
+      };
     };
   };
+
+  // public func resetLastChangeTimestamp() : async () {
+  //   for (i in List.keys(history_storage)) {
+  //     let h = List.get(history_storage, i);
+  //     let lastChange = StableBucketList.valuesRev<ExtendedChange.StableExtendedChange>(changes, Nat64.fromNat(i), ExtendedChange.changesListOps).next();
+  //     h.latest_change_timestamp := switch (lastChange) {
+  //       case (??c) c.timestamp_nanos;
+  //       case (_) 0;
+  //     };
+  //   };
+  // };
 
   func track_error(e : Error.Error) : Errors.Track {
     switch (Error.code(e)) {
