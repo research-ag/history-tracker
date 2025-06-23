@@ -125,7 +125,16 @@ actor class HistoryTracker() = self {
         },
       ),
     )
-    |> Iter.filter<?ExtendedChange.ExtendedChange>(_, func(x) = Option.isSome(x))
+    |> Iter.filter<?ExtendedChange.ExtendedChange>(
+      _,
+      func(x) {
+        if (Option.isNull(x)) {
+          Prim.debugPrint("[WARN] Could not deserialize history item in list #" # (debug_show historyIndex));
+          return false;
+        };
+        true;
+      },
+    )
     |> Iter.map<?ExtendedChange.ExtendedChange, ExtendedChange.ExtendedChange>(
       _,
       func(xopt) {
