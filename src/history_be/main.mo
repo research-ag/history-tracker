@@ -372,7 +372,7 @@ actor class HistoryTracker() = self {
       max : Nat;
       average : Float;
     };
-    changeBucketListStats : {
+    changeLogListsStats : {
       pages : { indexTable : Nat; data : Nat };
       bytesUsed : Nat;
       totalRecords : Nat;
@@ -413,8 +413,7 @@ actor class HistoryTracker() = self {
       maxSize := Nat.max(maxSize, size);
       totalSize += size;
     };
-    let csm = StableLogLists.memoryStats(changes);
-    let cts = StableLogLists.totalSize(changes);
+    let changesStats = StableLogLists.memoryStats(changes);
     ?{
       canistersAmount;
       setSize = {
@@ -433,10 +432,10 @@ actor class HistoryTracker() = self {
         max = maxChanges;
         average = Float.fromInt(totalChanges) / Float.fromInt(canistersAmount);
       };
-      changeBucketListStats = {
-        csm with
-        avgRecordSize = if (cts > 0) {
-          Float.fromInt(csm.bytesUsed) / Float.fromInt(csm.totalRecords);
+      changeLogListsStats = {
+        changesStats with
+        avgRecordSize = if (changesStats.totalRecords > 0) {
+          Float.fromInt(changesStats.bytesUsed) / Float.fromInt(changesStats.totalRecords);
         } else { 0.0 };
       };
     };
