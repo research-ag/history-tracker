@@ -205,8 +205,8 @@ actor class HistoryTracker() = self {
     if (mapIndex != id) {
       Prim.trap("Error while inserting canister to storage: map index is " # debug_show mapIndex # " while expected " # debug_show id);
     };
-    while (changes.bucketsAllocated <= id) {
-      ignore StableLogLists.allocateBucket(changes);
+    while (changes.listsAmount <= id) {
+      ignore StableLogLists.allocateList(changes);
     };
     List.add(history_storage, history);
     allCanistersTaskDataSource.setSize(id + 1);
