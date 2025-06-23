@@ -21,10 +21,10 @@ import List "mo:new-base/List";
 import Queue "mo:new-base/Queue";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
+import StableLogLists "mo:stable-log-lists";
 
 import Task "models/task";
 import StableOrderedSet "models/stable_ordered_set";
-import StableLogLists "models/stable_log_lists";
 
 import Http "utils/tiny_http";
 import RoundRobin "utils/round_robin";
