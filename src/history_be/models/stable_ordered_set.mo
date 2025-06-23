@@ -13,7 +13,7 @@ module {
 
     var storage : Enumeration.Enumeration = Enumeration.Enumeration({
       aridity = 4;
-      pointer_size = 6;
+      pointer_size = 4;
       key_size = keySize;
       root_aridity = ?(4 ** 6);
       value_size = 0;
