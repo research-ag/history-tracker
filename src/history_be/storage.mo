@@ -67,9 +67,6 @@ module {
       case (null) {};
     };
 
-    // events
-    public var onCanisterAdded : ?(() -> ()) = null;
-
     public func size() : Nat = List.size(historyStorage);
 
     public func isCanisterTracked(canisterId : Principal) : Bool = storageMap.has(canisterId);
@@ -92,10 +89,6 @@ module {
         ignore StableLogLists.allocateList(changes);
       };
       List.add(historyStorage, history);
-      switch (onCanisterAdded) {
-        case (?c) c();
-        case (_) {};
-      };
       id;
     };
 
