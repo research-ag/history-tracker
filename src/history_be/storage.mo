@@ -70,6 +70,9 @@ module {
     public func size() : Nat = List.size(historyStorage);
 
     public func isCanisterTracked(canisterId : Principal) : Bool = storageMap.has(canisterId);
+    public func trackedCanisters(limit : Nat, skip : Nat) : [Principal] {
+      storageMap.values() |> Iter.drop(_, skip) |> Iter.take(_, limit) |> Iter.toArray(_);
+    };
 
     public func canisterId(canisterIdx : Nat) : ?Principal = storageMap.get(canisterIdx);
     public func canisterIndex(canisterId : Principal) : ?Nat = storageMap.indexOf(canisterId);
@@ -192,12 +195,21 @@ module {
 
       ignore pt.addPullValue("stable_records_total", "structure=\"storage_map\"", func() = storageMap.size());
       ignore pt.addPullValue("stable_pages_allocated", "structure=\"storage_map\"", func() = getEnumerationPagesAllocated(storageMap.share()));
+      ignore pt.addPullValue("stable_map_byte_size", "structure=\"storage_map\"", func() = storageMap.memoryStats().byte_size);
+      ignore pt.addPullValue("stable_map_leaf_count", "structure=\"storage_map\"", func() = storageMap.memoryStats().leaf_count);
+      ignore pt.addPullValue("stable_map_node_count", "structure=\"storage_map\"", func() = storageMap.memoryStats().node_count);
 
       ignore pt.addPullValue("stable_records_total", "structure=\"principals_set\"", func() = principalsSet.size());
       ignore pt.addPullValue("stable_pages_allocated", "structure=\"principals_set\"", func() = getEnumerationPagesAllocated(principalsSet.share()));
+      ignore pt.addPullValue("stable_map_byte_size", "structure=\"principals_set\"", func() = principalsSet.memoryStats().byte_size);
+      ignore pt.addPullValue("stable_map_leaf_count", "structure=\"principals_set\"", func() = principalsSet.memoryStats().leaf_count);
+      ignore pt.addPullValue("stable_map_node_count", "structure=\"principals_set\"", func() = principalsSet.memoryStats().node_count);
 
       ignore pt.addPullValue("stable_records_total", "structure=\"hashes_set\"", func() = hashesSet.size());
       ignore pt.addPullValue("stable_pages_allocated", "structure=\"hashes_set\"", func() = getEnumerationPagesAllocated(hashesSet.share()));
+      ignore pt.addPullValue("stable_map_byte_size", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().byte_size);
+      ignore pt.addPullValue("stable_map_leaf_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().leaf_count);
+      ignore pt.addPullValue("stable_map_node_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().node_count);
 
     };
 

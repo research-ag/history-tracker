@@ -141,6 +141,8 @@ actor class HistoryTracker() = self {
 
   public query func tracked_canisters_total() : async Nat = async storage.size();
 
+  public query func tracked_canisters(limit : Nat, skip : Nat) : async [Principal] = async storage.trackedCanisters(limit, skip);
+
   public query func get_tracking_stats() : async Tracker.TrackingStats = async tracker.getTrackingStats();
 
   public query func last_round_details(taskAlias : ?Text) : async {
