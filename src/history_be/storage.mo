@@ -8,7 +8,7 @@ import Prim "mo:prim";
 import Principal "mo:base/Principal";
 import Region "mo:base/Region";
 
-import StableLogLists "mo:stable-log-lists";
+import LogLists "mo:stable-log-lists";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
 
@@ -26,7 +26,7 @@ module {
     // A list of history entries
     historyStorage : List.List<History.History>;
     // Changes lists. List index == history index in the storage
-    changes : StableLogLists.StableLogLists;
+    changes : LogLists.LogLists;
     // Maps the canister id to the history instance index in the storage.
     storageMap : ?Enumeration.StableData;
     // Global storage of principals, which are presented in changes list. In the records we store only index of the entry in the ordered set
@@ -39,7 +39,7 @@ module {
 
   public func defaultStableDataV1() : StableDataV1 = {
     historyStorage = List.empty();
-    changes = StableLogLists.new();
+    changes = LogLists.new();
     storageMap = null;
     principalsSet = null;
     hashesSet = null;
@@ -90,14 +90,14 @@ module {
         Prim.trap("Error while inserting canister to storage: map index is " # debug_show mapIndex # " while expected " # debug_show id);
       };
       while (changes.listsAmount <= id) {
-        ignore StableLogLists.allocateList(changes);
+        ignore LogLists.createList(changes);
       };
       List.add(historyStorage, history);
       id;
     };
 
     public func readChanges(canisterIdx : Nat) : [ExtendedChange.ExtendedChange] {
-      StableLogLists.values(changes, canisterIdx)
+      LogLists.values(changes, canisterIdx)
       |> Iter.map<Blob, ?ExtendedChange.ExtendedChange>(
         _,
         func(b) = ExtendedChange.deserializeExtendedChange(
@@ -142,7 +142,7 @@ module {
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
       for (change in info.recent_changes.vals()) {
         if (change.timestamp_nanos > latestChangeTimestamp) {
-          StableLogLists.append(
+          LogLists.append(
             changes,
             canisterIdx,
             ExtendedChange.serializeExtendedChange(
@@ -191,7 +191,7 @@ module {
         Nat64.toNat(Region.size(data.nodes.region) + Region.size(data.leaves.region));
       };
 
-      ignore pt.addPullValue("stable_records_total", "structure=\"changes_lists\"", func() = StableLogLists.totalSize(changes));
+      ignore pt.addPullValue("stable_records_total", "structure=\"changes_lists\"", func() = LogLists.totalSize(changes));
       ignore pt.addPullValue("stable_pages_allocated", "structure=\"changes_lists\"", func() = Nat64.toNat(Region.size(changes.data) + Region.size(changes.indexTable)));
 
       ignore pt.addPullValue("stable_records_total", "structure=\"storage_map\"", func() = storageMap.size());

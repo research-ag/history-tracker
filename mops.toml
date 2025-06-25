@@ -4,7 +4,7 @@ new-base = "0.4.0"
 vector = "0.4.1"
 promtracker = "0.6.0"
 stable-trie = "0.0.1"
-stable-log-lists = "https://github.com/research-ag/stable-log-lists.git#rc-0.0.1"
+stable-log-lists = "https://github.com/research-ag/stable-log-lists.git#30cba613fdcf7a459b53f5223198fdef832d81b1"
 
 [dev-dependencies]
 test = "2.0.0"
