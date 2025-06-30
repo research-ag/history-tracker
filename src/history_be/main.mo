@@ -368,16 +368,10 @@ actor class HistoryTracker() = self {
   public func setRoundsInterval(taskAlias : ?Text, n_ : Nat) {
     let n = Nat64.fromNat(n_);
     switch (taskAlias) {
-      case (?"all_canisters") allCanistersTask.roundsInterval := n;
+      case (?"all_canisters" or null) allCanistersTask.roundsInterval := n;
       case (?alias) {
         let ?task = Map.get(tasks, Text.compare, alias) else throw Error.reject("Task with provided alias not found");
         task.roundsInterval := n;
-      };
-      case (null) {
-        allCanistersTask.roundsInterval := n;
-        for (task in Map.values(tasks)) {
-          task.roundsInterval := n;
-        };
       };
     };
   };
