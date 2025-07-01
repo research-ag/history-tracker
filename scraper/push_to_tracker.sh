@@ -6,7 +6,7 @@
 
 SKIP="$1"
 LIMIT=100
-FILE="canister_ids.txt"
+FILE="new_canister_ids.txt"
 TOTAL_LINES=$(wc -l < "$FILE")
 
 if [[ -z "$SKIP" ]]; then
@@ -47,7 +47,7 @@ while true; do
 
   # Call the canister
   echo "Processing chunk starting at skip=$CURRENT_SKIP..."
-  if dfx canister call history_be trackMany "vec { $PRINCIPAL_LIST }" --ic; then
+  if dfx canister call history_be_2 trackMany "(null, vec { $PRINCIPAL_LIST })" --ic; then
     LAST_SUCCESSFUL_SKIP=$CURRENT_SKIP
     echo "Successfully processed chunk. Last successful skip: $LAST_SUCCESSFUL_SKIP"
   else
@@ -58,4 +58,5 @@ while true; do
 
   # Update skip for next iteration
   CURRENT_SKIP=$((CURRENT_SKIP + LIMIT))
+
 done
