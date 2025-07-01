@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  auto-update:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    entrypoint: sh -c "while true; do node auto_update.js; sleep 86400; done"
