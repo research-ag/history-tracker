@@ -6,4 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    entrypoint: sh -c "while true; do node auto_update.js; sleep 86400; done"
+    entrypoint: >
+      sh -c "while true; do start=$$(date +%s); node auto_update.js; end=$$(date +%s); sleep_time=$$((86400 - (end - start))); if [ $$sleep_time -gt 0 ]; then sleep $$sleep_time; fi; done"
+    volumes:
+      - ./deleted_canister_ids.txt:/app/deleted_canister_ids.txt

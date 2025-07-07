@@ -1,20 +1,30 @@
 import {execSync} from 'child_process';
 import https from 'https';
+import fs from 'fs';
 
 const TRACKER_CANISTER_ID = 'jcmga-jqaaa-aaaao-a4lha-cai';
 
 const sleep = () => new Promise(resolve => setTimeout(resolve, 5000));
 
+let log = console.log;
+console.log = (...args) => {
+    log(`[${new Date().toISOString()}]`, ...args);
+}
+
 let newCanisterIds = new Set();
 
 const push = async () => {
-    const principalList = Array.from(newCanisterIds).map(id => `principal \\"${id}\\"`).join('; ');
-    console.log(`Pushing ${newCanisterIds.size} new canister IDs`);
+    const cids = Array.from(newCanisterIds);
+    console.log(`Pushing ${cids.length} new canister IDs`);
     while (true) {
         try {
-            execSync(`dfx canister call ${TRACKER_CANISTER_ID} trackMany "(null, vec { ${principalList} })" --ic`, {
-                stdio: 'inherit',
-            });
+            const response = execSync(`dfx canister call ${TRACKER_CANISTER_ID} trackMany "(null, vec { ${cids.map(id => `principal \\"${id}\\"`).join('; ')} })"  --output json --ic`, {encoding: 'utf8'});
+            const ret = JSON.parse(response);
+            for (let i = 0; i < ret.length; i++) {
+                if (ret[i].err && 'DoesNotExist' in ret[i].err) {
+                    fs.appendFileSync('deleted_canister_ids.txt', `${cids[i]}\n`);
+                }
+            }
             break;
         } catch (err) {
             console.error('Error pushing new canister IDs:', err.message);
@@ -44,14 +54,14 @@ setTimeout(async () => {
     let registeredCanisterIds = new Set();
     console.log('Loading canister IDs from history tracker canister');
     let skip = 0;
-    let LIMIT = 1000;
+    let LIMIT = 10_000;
     while (true) {
         console.log('Fetching batch with offset:', skip);
         try {
-            const response = execSync(`dfx canister call ${TRACKER_CANISTER_ID} tracked_canisters "(${LIMIT} : nat, ${skip} : nat)" --ic`, {
+            const response = execSync(`dfx canister call ${TRACKER_CANISTER_ID} tracked_canisters "(${LIMIT} : nat, ${skip} : nat)" --output json --ic`, {
                 encoding: 'utf8',
             });
-            let principals = Array.from(response.matchAll(/"([^"]+)"/g), m => m[1]);
+            const principals = JSON.parse(response);
             if (principals.length === 0) {
                 console.log('No more results.');
                 break;
@@ -110,7 +120,7 @@ setTimeout(async () => {
             const principals = batch.map(item => item.canister_id)
                 .filter(a => !!a && !deletedCanisterIds.has(a) && !registeredCanisterIds.has(a));
             if (principals.length > 0) {
-                console.log(`Found ${principals.length} new canisters`);
+                console.log(`Found ${principals.length} new canisters (+ ${newCanisterIds.size} staged)`);
                 for (const p of principals) {
                     await onNewCanisterFound(p);
                 }

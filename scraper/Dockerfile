@@ -20,7 +20,6 @@ RUN dfx --version
 WORKDIR /app
 
 COPY auto_update.js .
-COPY deleted_canister_ids.txt .
 
 RUN chmod +x auto_update.js
 
