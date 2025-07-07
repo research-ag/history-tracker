@@ -33,13 +33,6 @@ import Tracker "./tracker";
 actor class HistoryTracker() = self {
 
   module Errors {
-    public type Track = {
-      #AlreadyTracked : { message : Text };
-      #DoesNotExist : { message : Text };
-      #Busy : { message : Text };
-      #Unexpected : { message : Text };
-    };
-
     public type UpdateMetadata = {
       #CanisterNotTracked : { message : Text };
     };
@@ -56,8 +49,8 @@ actor class HistoryTracker() = self {
   var canisters_num_to_sync = 100;
 
   /// A storage of history data
-  stable var storageData : Storage.StableDataV1 = Storage.defaultStableDataV1();
-  let storage : Storage.Storage = Storage.Storage(storageData);
+  stable var storageDataV2 : Storage.StableDataV1 = Storage.defaultStableDataV1();
+  let storage : Storage.Storage = Storage.Storage(storageDataV2);
 
   /// Main task which loops over all of the canisters
   stable var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
@@ -166,27 +159,14 @@ actor class HistoryTracker() = self {
 
   public query func is_canister_tracked(canister_id : Principal) : async Bool = async storage.isCanisterTracked(canister_id);
 
-  func track_error(e : Error.Error) : Errors.Track {
-    switch (Error.code(e)) {
-      case (#destination_invalid) return #DoesNotExist({
-        message = "The canister does not exist.";
-      });
-      case (#system_transient or #system_unknown) return #Busy({
-        message = "The system is busy. Try again.";
-      });
-      case (_) return #Unexpected({
-        message = "An unexpected error was encountered: " # Error.message(e);
-      });
-    };
-  };
-
-  public func track(canister_id : Principal) : async Result.Result<(), Errors.Track> {
+  public func track(canister_id : Principal) : async Result.Result<(), History.TrackError> {
     if (storage.isCanisterTracked(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let new_canister_history = History.new();
-    let info = try {
-      await* History.sync(canister_id, new_canister_history);
-    } catch (e) {
-      return #err(track_error(e));
+    let info = switch (
+      await* History.sync(canister_id, new_canister_history)
+    ) {
+      case (#ok x) x;
+      case (#err err) return #err(err);
     };
     if (storage.isCanisterTracked(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
     let id = insertCanister(canister_id, new_canister_history);
@@ -228,20 +208,21 @@ actor class HistoryTracker() = self {
     let start_time = Time.now();
     pt_syncAttempts.add(1);
     open_calls += 1;
-    try {
-      let info = await* History.sync(canisterId, h);
-      h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
-      pt_changesPerSync.update(info.recent_changes.size());
-      pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
-    } catch (e) {
-      switch (Error.code(e)) {
-        case (#system_transient or #system_unknown) Queue.pushBack(backlog, canisterIdx);
-        case (_) {}; // canister was deleted, skip it
+    switch (await* History.sync(canisterId, h)) {
+      case (#ok info) {
+        h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
+        pt_changesPerSync.update(info.recent_changes.size());
+        pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
       };
-      pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
-    } finally {
-      open_calls -= 1;
+      case (#err err) {
+        switch (err) {
+          case (#Busy _) Queue.pushBack(backlog, canisterIdx);
+          case (_) {};
+        };
+        pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+      };
     };
+    open_calls -= 1;
   };
 
   func trigger_sync() : async* () {
@@ -258,15 +239,17 @@ actor class HistoryTracker() = self {
     label l while (callsToSpawn > 0) {
       switch (Queue.peekFront(backlog)) {
         case (?idx) {
-          try {
-            ignore callItem(idx);
-            spawnedCalls += 1;
-          } catch (_) {
-            pt_spawnedCalls.update(spawnedCalls);
-            return;
+          if (not storage.get(idx).is_deleted) {
+            try {
+              ignore callItem(idx);
+              spawnedCalls += 1;
+              callsToSpawn -= 1;
+            } catch (_) {
+              pt_spawnedCalls.update(spawnedCalls);
+              return;
+            };
           };
           ignore Queue.popFront(backlog);
-          callsToSpawn -= 1;
         };
         case (_) break l;
       };
@@ -292,15 +275,22 @@ actor class HistoryTracker() = self {
       |> List.map<Task.Task, Iter.Iter<Nat>>(_, func(t) = t.dataSource)
       |> List.toArray(_);
 
-      let canistersToCall = RoundRobin.roundRobinCollect(dataSources, callsToSpawn, ?Nat.equal);
+      let canistersToCall = RoundRobin.roundRobinCollect(dataSources, ?Nat.equal);
       label l for ((sourceIdx, canisterIdx) in canistersToCall) {
+        if (storage.get(canisterIdx).is_deleted) {
+          continue l;
+        };
         try {
           ignore callItem(canisterIdx);
           spawnedCalls += 1;
+          callsToSpawn -= 1;
         } catch (_) {
           // revert ctr increment in the data source
           let task = List.get(tasksToRun, sourceIdx);
           task.dataSource.decCtr();
+          break l;
+        };
+        if (callsToSpawn == 0) {
           break l;
         };
       };
@@ -406,15 +396,16 @@ actor class HistoryTracker() = self {
     Task.deregisterMetrics(pt, task);
   };
 
-  public func trackMany(taskAlias : ?Text, canister_ids : [Principal]) : async [Result.Result<(), Errors.Track>] {
+  public func trackMany(taskAlias : ?Text, canister_ids : [Principal]) : async [Result.Result<(), History.TrackError>] {
 
-    func syncCall(canister_id : Principal) : async Result.Result<(), Errors.Track> {
+    func syncCall(canister_id : Principal) : async Result.Result<(), History.TrackError> {
       if (storage.isCanisterTracked(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
       let newCanisterHistory = History.new();
-      let info = try {
-        await* History.sync(canister_id, newCanisterHistory);
-      } catch (err) {
-        return #err(track_error(err));
+      let info = switch (
+        await* History.sync(canister_id, newCanisterHistory)
+      ) {
+        case (#ok x) x;
+        case (#err err) return #err(err);
       };
       if (storage.isCanisterTracked(canister_id)) return #err(#AlreadyTracked({ message = "The canister is already tracked." }));
       let id = insertCanister(canister_id, newCanisterHistory);
@@ -422,12 +413,12 @@ actor class HistoryTracker() = self {
       #ok();
     };
 
-    func trackInMainTask_(canister_ids : [Principal]) : async* [Result.Result<(), Errors.Track>] {
+    func trackInMainTask_(canister_ids : [Principal]) : async* [Result.Result<(), History.TrackError>] {
       let len = canister_ids.size();
       if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
 
-      let results = Array.init<Result.Result<(), Errors.Track>>(len, #ok());
-      let calls = Buffer.Buffer<(Nat, async Result.Result<(), Errors.Track>)>(len);
+      let results = Array.init<Result.Result<(), History.TrackError>>(len, #ok());
+      let calls = Buffer.Buffer<(Nat, async Result.Result<(), History.TrackError>)>(len);
 
       label L for (i in canister_ids.keys()) {
         let id = canister_ids[i];
@@ -445,8 +436,8 @@ actor class HistoryTracker() = self {
       for ((i, c) in calls.vals()) {
         results[i] := try {
           await c;
-        } catch (err) {
-          #err(track_error(err));
+        } catch (e) {
+          #err(History.track_error(e));
         };
       };
 
@@ -457,7 +448,7 @@ actor class HistoryTracker() = self {
       case (null) await* trackInMainTask_(canister_ids);
       case (?ta) {
         let ?task = Map.get(tasks, Text.compare, ta) else throw Error.reject("Task with provided alias not found");
-        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.thaw<Result.Result<(), Errors.Track>>(_);
+        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.thaw<Result.Result<(), History.TrackError>>(_);
         for (i in trackResult.keys()) {
           switch (trackResult[i]) {
             case (#ok or #err(#AlreadyTracked _)) {
@@ -478,7 +469,7 @@ actor class HistoryTracker() = self {
   };
 
   system func preupgrade() {
-    storageData := storage.share();
+    storageDataV2 := storage.share();
     allCanistersTaskData := (allCanistersTaskDataSource.share(), allCanistersTask);
     tasksData := Map.map<Text, Task.BufferTask, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>(
       tasks,

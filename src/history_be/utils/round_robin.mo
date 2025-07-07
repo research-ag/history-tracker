@@ -153,21 +153,17 @@ module {
     };
   };
 
-  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], amount : Nat, deduplicationEqual : ?((T, T) -> Bool)) : Iter.Iter<(Nat, T)> {
+  public func roundRobinCollect<T>(sources : [Iter.Iter<T>], deduplicationEqual : ?((T, T) -> Bool)) : Iter.Iter<(Nat, T)> {
     if (sources.size() == 0) return Iter.empty();
 
     var sourcesToUse : Queue.Queue<(Nat, Iter.Iter<T>)> = sources.keys()
     |> Iter.map<Nat, (Nat, Iter.Iter<T>)>(_, func(i) = (i, sources[i]))
     |> Queue.fromIter(_);
 
-    var itemsToProduce = amount;
     var producedItems : List.List<T> = List.empty();
 
     return {
       next = func() : ?(Nat, T) {
-        if (itemsToProduce == 0) return null;
-        itemsToProduce -= 1;
-
         label l while (true) {
           let ?(sourceIdx, source) = Queue.popFront(sourcesToUse) else return null;
           switch (source.next()) {
@@ -175,11 +171,13 @@ module {
               Queue.pushBack(sourcesToUse, (sourceIdx, source));
               switch (deduplicationEqual) {
                 case (null) {};
-                case (?eq) if (Option.isSome(List.indexOf(producedItems, eq, x))) {
-                  continue l;
+                case (?eq) {
+                  if (Option.isSome(List.indexOf(producedItems, eq, x))) {
+                    continue l;
+                  };
+                  List.add(producedItems, x);
                 };
               };
-              List.add(producedItems, x);
               return ?(sourceIdx, x);
             };
             case (null) {};
