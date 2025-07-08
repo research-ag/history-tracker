@@ -1,6 +1,7 @@
-import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Prim "mo:prim";
+
+import Iter "mo:new-base/Iter";
 
 import RoundRobin "../../src/history_be/utils/round_robin";
 
@@ -12,7 +13,9 @@ let _ : Iter.Iter<Float> = RoundRobin.RoundRobinBuffer<Float>(null);
 let _ : RoundRobin.RoundRobinSource<Nat> = RoundRobin.RoundRobinNatGenerator(null);
 let _ : Iter.Iter<Nat> = RoundRobin.RoundRobinNatGenerator(null);
 
-func mapRes<T>(res : Iter.Iter<(Nat, T)>) : [T] = Iter.map<(Nat, T), T>(res, func(_, x) = x) |> Iter.toArray(_);
+func mapRes<T>(res : Iter.Iter<(Nat, T)>, itemsAmount : Nat) : [T] = Iter.take<(Nat, T)>(res, itemsAmount)
+|> Iter.map<(Nat, T), T>(_, func(_, x) = x)
+|> Iter.toArray(_);
 
 // ================== RoundRobinBuffer tests ==================
 do {
@@ -180,7 +183,7 @@ func bCreate(items : [Nat]) : RoundRobin.RoundRobinBuffer<Nat> {
 
 do {
   Prim.debugPrint("roundRobinCollect :: should return empty array when no buffers");
-  let res = RoundRobin.roundRobinCollect<Nat>([], 100, null) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>([], null) |> mapRes(_, 100);
   assert res.size() == 0;
 };
 
@@ -189,7 +192,7 @@ do {
   let b = bCreate([0, 1, 2, 3, 4, 5, 6, 7]);
   assert b.itemsRemaining() == 8;
 
-  let res = RoundRobin.roundRobinCollect<Nat>([b], 3, null) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>([b], null) |> mapRes(_, 3);
   assert res.size() == 3;
   assert res == [0, 1, 2];
   assert b.itemsRemaining() == 5;
@@ -197,7 +200,7 @@ do {
 
 do {
   Prim.debugPrint("roundRobinCollect :: should work with regular iterables");
-  let res = RoundRobin.roundRobinCollect<Nat>([[0, 1, 2, 3, 4, 5, 6, 7].vals()], 5, null) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>([[0, 1, 2, 3, 4, 5, 6, 7].vals()], null) |> mapRes(_, 5);
   assert res.size() == 5;
   assert res == [0, 1, 2, 3, 4];
 };
@@ -207,7 +210,7 @@ do {
   let b = bCreate([0, 1, 2, 3]);
   assert b.itemsRemaining() == 4;
 
-  let res = RoundRobin.roundRobinCollect<Nat>([b], 100, null) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>([b], null) |> mapRes(_, 100);
   assert res.size() == 4;
   assert res == [0, 1, 2, 3];
   assert b.itemsRemaining() == 4; // buffer round-robin state should be reset
@@ -215,7 +218,7 @@ do {
 
 do {
   Prim.debugPrint("roundRobinCollect :: should handle empty buffers");
-  let res = RoundRobin.roundRobinCollect<Nat>([bCreate([]), bCreate([]), bCreate([]), bCreate([]), bCreate([])], 100, null) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>([bCreate([]), bCreate([]), bCreate([]), bCreate([]), bCreate([])], null) |> mapRes(_, 100);
   assert res.size() == 0;
 };
 
@@ -228,20 +231,20 @@ do {
     bCreate([300, 301, 302, 303, 304, 305]),
   ];
 
-  let res0 = RoundRobin.roundRobinCollect<Nat>(buffers, 3, null) |> mapRes(_);
+  let res0 = RoundRobin.roundRobinCollect<Nat>(buffers, null) |> mapRes(_, 3);
   assert res0.size() == 3;
   assert res0 == [100, 200, 300];
 
-  let res1 = RoundRobin.roundRobinCollect<Nat>(buffers, 3, null) |> mapRes(_);
+  let res1 = RoundRobin.roundRobinCollect<Nat>(buffers, null) |> mapRes(_, 3);
   assert res1.size() == 3;
   assert res1 == [101, 201, 301];
 
-  let res2 = RoundRobin.roundRobinCollect<Nat>(buffers, 3, null) |> mapRes(_);
+  let res2 = RoundRobin.roundRobinCollect<Nat>(buffers, null) |> mapRes(_, 3);
   assert res2.size() == 3;
   assert res2 == [102, 202, 302];
 
   // Note: 2 items got from buffer 3 because buffer 2 ended. We do not immediately get first item from buffer 2 again
-  let res3 = RoundRobin.roundRobinCollect<Nat>(buffers, 3, null) |> mapRes(_);
+  let res3 = RoundRobin.roundRobinCollect<Nat>(buffers, null) |> mapRes(_, 3);
   assert res3.size() == 3;
   assert res3 == [103, 303, 304];
 };
@@ -254,7 +257,7 @@ do {
     bCreate([200, 555, 202]),
   ];
 
-  let res = RoundRobin.roundRobinCollect<Nat>(buffers, 6, null) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>(buffers, null) |> mapRes(_, 6);
   assert res.size() == 6;
   assert res == [555, 200, 101, 555, 102, 202];
 };
@@ -267,7 +270,7 @@ do {
     bCreate([200, 555, 202]),
   ];
 
-  let res = RoundRobin.roundRobinCollect<Nat>(buffers, 6, ?Nat.equal) |> mapRes(_);
+  let res = RoundRobin.roundRobinCollect<Nat>(buffers, ?Nat.equal) |> mapRes(_, 6);
   assert res.size() == 6;
   assert res == [555, 200, 101, 102, 202, 103];
 };
@@ -279,7 +282,7 @@ do {
     bCreate([555, 101, 102, 103]),
     bCreate([200, 555, 202]),
   ];
-  let iter = RoundRobin.roundRobinCollect<Nat>(buffers, 6, null);
+  let iter = RoundRobin.roundRobinCollect<Nat>(buffers, null);
 
   assert buffers[0].ctr() == 0;
   assert buffers[1].ctr() == 0;
@@ -309,7 +312,7 @@ do {
     bCreate([200, 201]),
     bCreate([300, 301, 302, 303, 304]),
   ];
-  let res = RoundRobin.roundRobinCollect<Nat>(buffers, 11, null) |> Iter.toArray(_);
+  let res = RoundRobin.roundRobinCollect<Nat>(buffers, null) |> Iter.take(_, 11) |> Iter.toArray(_);
 
   assert res == [
     (0, 100),

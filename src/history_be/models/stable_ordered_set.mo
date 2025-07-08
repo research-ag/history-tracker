@@ -1,4 +1,6 @@
+import Iter "mo:base/Iter";
 import Option "mo:base/Option";
+import Prim "mo:prim";
 
 import Enumeration "mo:stable-trie/Enumeration";
 
@@ -37,6 +39,21 @@ module {
       let ?(d, _) = storage.get(index) else return null;
       deserializeValue(d);
     };
+
+    public func values() : Iter.Iter<T> {
+      storage.keys()
+      |> Iter.map<Blob, ?T>(_, deserializeValue)
+      |> Iter.filter<?T>(_, func x = Option.isSome(x))
+      |> Iter.map<?T, T>(
+        _,
+        func xopt {
+          let ?x = xopt else Prim.trap("Can never happen");
+          x;
+        },
+      );
+    };
+
+    public func memoryStats() : Enumeration.MemoryStats = storage.memoryStats();
 
     public func share() : Enumeration.StableData = storage.share();
     public func unshare(v : Enumeration.StableData) = storage.unshare(v);
