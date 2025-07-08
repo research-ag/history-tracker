@@ -1,5 +1,5 @@
 [dependencies]
-base = "0.14.9"
+base = "0.14.13"
 new-base = "0.4.0"
 vector = "0.4.1"
 promtracker = "0.6.0"
@@ -10,4 +10,4 @@ stable-log-lists = "https://github.com/research-ag/stable-log-lists.git#30cba613
 test = "2.0.0"
 
 [toolchain]
-moc = "0.14.9"
+moc = "0.14.13"

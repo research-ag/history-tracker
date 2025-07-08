@@ -65,4 +65,15 @@ module History {
       #err(track_error(e));
     };
   };
+
+  public func sync_call_arg(canister_id : Principal) : IC.CanisterInfoRequest = {
+    canister_id;
+    num_requested_changes = ?Nat64.fromNat(20);
+  };
+
+  public func sync_call_process_response(history : History, info : IC.CanisterInfoResponse) {
+    history.total_num_changes := info.total_num_changes;
+    history.timestamp_nanos := Prim.time();
+    history.sync_version += 1;
+  };
 };
