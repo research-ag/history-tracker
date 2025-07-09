@@ -85,8 +85,8 @@ actor class HistoryTracker() = self {
     id;
   };
 
-  let start_time = Time.now();
-  func uptime() : Nat = Int.abs(Time.now() - start_time) / 1_000_000_000;
+  let canister_start_time = Time.now();
+  func uptime() : Nat = Int.abs(Time.now() - canister_start_time) / 1_000_000_000;
 
   // must be 0 when canister was stopped, but we declare it stable to test whether that is true
   var open_calls = 0;
@@ -215,30 +215,33 @@ actor class HistoryTracker() = self {
 
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
 
-    func callItem(canisterIdx : Nat) : () {
+    func callItem(canisterIdx : Nat, register_fail_cb : () -> ()) : () {
       let h = storage.get(canisterIdx);
       let ?canisterId = storage.canisterId(canisterIdx) else Prim.trap("Can never happen!");
-      var start_time : Time.Time = 0;
+      var call_start_time : Time.Time = 0;
       let item : Concurrent.Item = {
         call_arg = History.sync_call_arg(canisterId);
         register_call = func() {
-          start_time := Time.now();
+          call_start_time := Time.now();
           pt_syncAttempts.add(1);
           open_calls += 1;
+          spawnedCalls += 1;
         };
+        register_fail_cb;
         process_response = func(info) {
           History.sync_call_process_response(h, info);
           h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
           pt_changesPerSync.update(info.recent_changes.size());
-          pt_syncSuccessDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+          pt_syncSuccessDuration.update(Int.abs(Time.now() - call_start_time) / 1_000_000_000);
           open_calls -= 1;
         };
-        process_error = func(err) {
-          switch (Error.code(err)) {
-            case (#system_transient or #system_unknown) Queue.pushBack(backlog, canisterIdx);
+        process_error = func(e) {
+          let error = History.sync_call_process_error(h, e);
+          switch (error) {
+            case (#Busy _) Queue.pushBack(backlog, canisterIdx);
             case (_) {};
           };
-          pt_syncFailureDuration.update(Int.abs(Time.now() - start_time) / 1_000_000_000);
+          pt_syncFailureDuration.update(Int.abs(Time.now() - call_start_time) / 1_000_000_000);
           open_calls -= 1;
         };
       };
@@ -247,19 +250,12 @@ actor class HistoryTracker() = self {
 
     // process backlog first
     label l while (callsToSpawn > 0) {
-      switch (Queue.peekFront(backlog)) {
+      switch (Queue.popFront(backlog)) {
         case (?idx) {
           if (not storage.get(idx).is_deleted) {
-            try {
-              callItem(idx);
-              spawnedCalls += 1;
-              callsToSpawn -= 1;
-            } catch (_) {
-              pt_spawnedCalls.update(spawnedCalls);
-              return;
-            };
+            callItem(idx, func() = Queue.pushFront(backlog, idx));
+            callsToSpawn -= 1;
           };
-          ignore Queue.popFront(backlog);
         };
         case (_) break l;
       };
@@ -290,16 +286,8 @@ actor class HistoryTracker() = self {
         if (storage.get(canisterIdx).is_deleted) {
           continue l;
         };
-        try {
-          callItem(canisterIdx);
-          spawnedCalls += 1;
-          callsToSpawn -= 1;
-        } catch (_) {
-          // revert ctr increment in the data source
-          let task = List.get(tasksToRun, sourceIdx);
-          task.dataSource.decCtr();
-          break l;
-        };
+        callItem(canisterIdx, func() = List.get(tasksToRun, sourceIdx).dataSource.decCtr());
+        callsToSpawn -= 1;
         if (callsToSpawn == 0) {
           break l;
         };
@@ -325,12 +313,11 @@ actor class HistoryTracker() = self {
       };
     };
 
-    pt_spawnedCalls.update(spawnedCalls);
-
     await* Concurrent.make_calls(
       Buffer.toArray(calls),
       func(i) { trapsDetected += 1 }, // trap_cb
     );
+    pt_spawnedCalls.update(spawnedCalls);
   };
 
   var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(

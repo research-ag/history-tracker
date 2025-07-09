@@ -107,8 +107,10 @@ module {
     public func decCtr() {
       if (ctr_ > 0) {
         ctr_ -= 1;
-      } else {
+      } else if (size_ > 0) {
         ctr_ := size_ - 1;
+      } else {
+        ctr_ := 0;
       };
     };
     public func round() : Nat = round_;
