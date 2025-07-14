@@ -209,7 +209,7 @@ actor class HistoryTracker() = self {
     // Debug.print("Open calls: " # debug_show open_calls);
     pt_backlog.update(Queue.size(backlog));
 
-    let now = Prim.time() / 1_000_000_000;
+    let trigger_start_time = Prim.time() / 1_000_000_000;
     var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
     var spawnedCalls = 0;
 
@@ -218,11 +218,9 @@ actor class HistoryTracker() = self {
     func callItem(canisterIdx : Nat, register_fail_cb : () -> ()) : () {
       let h = storage.get(canisterIdx);
       let ?canisterId = storage.canisterId(canisterIdx) else Prim.trap("Can never happen!");
-      var call_start_time : Time.Time = 0;
       let item : Concurrent.Item = {
         call_arg = History.sync_call_arg(canisterId);
         register_call = func() {
-          call_start_time := Time.now();
           pt_syncAttempts.add(1);
           open_calls += 1;
           spawnedCalls += 1;
@@ -232,7 +230,7 @@ actor class HistoryTracker() = self {
           History.sync_call_process_response(h, info);
           h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
           pt_changesPerSync.update(info.recent_changes.size());
-          pt_syncSuccessDuration.update(Int.abs(Time.now() - call_start_time) / 1_000_000_000);
+          pt_syncSuccessDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
           open_calls -= 1;
         };
         process_error = func(e) {
@@ -241,7 +239,7 @@ actor class HistoryTracker() = self {
             case (#Busy _) Queue.pushBack(backlog, canisterIdx);
             case (_) {};
           };
-          pt_syncFailureDuration.update(Int.abs(Time.now() - call_start_time) / 1_000_000_000);
+          pt_syncFailureDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
           open_calls -= 1;
         };
       };
@@ -269,7 +267,7 @@ actor class HistoryTracker() = self {
       // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
       tasksToRun := List.filter<Task.Task>(
         tasksToRun,
-        func(t) = t.dataSource.ctr() > 0 or now >= t.roundStart + t.roundsInterval,
+        func(t) = t.dataSource.ctr() > 0 or trigger_start_time >= t.roundStart + t.roundsInterval,
       );
 
       // compile a list of tasks that about to start a new round
@@ -296,15 +294,15 @@ actor class HistoryTracker() = self {
       // detect the start of a round
       for ((t, lastRound) in List.values(roundStartCandidates)) {
         if (t.dataSource.round() != lastRound or t.dataSource.ctr() > 0) {
-          t.roundStart := now;
+          t.roundStart := trigger_start_time;
         };
       };
 
       // detect the end of a round
       for (t in List.values(tasksToRun)) {
         if (t.dataSource.ctr() == 0) {
-          t.lastRoundCompletedAt := now;
-          t.lastRoundDuration := now - t.roundStart;
+          t.lastRoundCompletedAt := trigger_start_time;
+          t.lastRoundDuration := trigger_start_time - t.roundStart;
           switch (t.metrics.roundDurationGauge) {
             case (?g) g.update(t.lastRoundDuration |> Nat64.toNat(_));
             case (_) {};
