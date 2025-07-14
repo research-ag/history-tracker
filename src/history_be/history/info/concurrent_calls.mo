@@ -9,7 +9,6 @@ module {
     process_response : Call.Response -> ();
     process_error : Error.Error -> ();
     register_call : () -> ();
-    register_fail_cb : () -> ();
   };
 
   type BufferItem = (async Call.Response, Call.Response -> (), Error.Error -> ());
@@ -23,11 +22,6 @@ module {
         c.register_call(); // register that call was scheduled
       } catch _ {
         // stop scheduling more calls
-        var j = i;
-        while (j < calls.size()) {
-          calls[j].register_fail_cb();
-          j += 1;
-        };
         break L;
       };
     };

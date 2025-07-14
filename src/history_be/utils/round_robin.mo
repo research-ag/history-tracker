@@ -6,13 +6,17 @@ import Queue "mo:new-base/Queue";
 module {
 
   // interface
-  public type RoundRobinSource<T> = {
+  public type RoundRobinSource<T> = Iter.Iter<T> and {
     ctr : () -> Nat;
-    decCtr : () -> ();
     round : () -> Nat;
     size : () -> Nat;
     itemsRemaining : () -> Nat;
-    next : () -> ?T;
+
+    // start viewing elements one by one, do not touch the progress pointer
+    view : () -> Iter.Iter<T>;
+    // advance pointer by N
+    commit : Nat -> ();
+
     resetProgress : () -> ();
   };
 
@@ -31,13 +35,6 @@ module {
     var items_ : List.List<T> = List.empty();
 
     public func ctr() : Nat = ctr_;
-    public func decCtr() {
-      if (ctr_ > 0) {
-        ctr_ -= 1;
-      } else {
-        ctr_ := List.size(items_) - 1;
-      };
-    };
     public func round() : Nat = round_;
 
     public func size() : Nat = List.size(items_);
@@ -54,6 +51,29 @@ module {
         ctr_ := 0;
       };
       return null;
+    };
+
+    public func view() : Iter.Iter<T> {
+      let baseCtr = ctr_;
+      var i = 0;
+      {
+        next = func() : ?T {
+          let ctr = baseCtr + i;
+          if (ctr < List.size(items_)) {
+            i += 1;
+            return ?List.get(items_, ctr);
+          };
+          null;
+        };
+      };
+    };
+
+    public func commit(n : Nat) {
+      ctr_ += n;
+      if (ctr_ >= List.size(items_)) {
+        round_ += 1;
+        ctr_ := 0;
+      };
     };
 
     public func getItem(index : Nat) : T {
@@ -104,13 +124,6 @@ module {
     var size_ : Nat = 0;
 
     public func ctr() : Nat = ctr_;
-    public func decCtr() {
-      if (ctr_ > 0) {
-        ctr_ -= 1;
-      } else if (size_ > 0) {
-        ctr_ := size_ - 1;
-      };
-    };
     public func round() : Nat = round_;
 
     public func size() : Nat = size_;
@@ -128,6 +141,29 @@ module {
         ctr_ := 0;
       };
       return null;
+    };
+
+    public func view() : Iter.Iter<Nat> {
+      let baseCtr = ctr_;
+      var i = 0;
+      {
+        next = func() : ?Nat {
+          let ctr = baseCtr + i;
+          if (ctr < size_) {
+            i += 1;
+            return ?ctr;
+          };
+          null;
+        };
+      };
+    };
+
+    public func commit(n : Nat) {
+      ctr_ += n;
+      if (ctr_ >= size_) {
+        round_ += 1;
+        ctr_ := 0;
+      };
     };
 
     public func resetProgress() {

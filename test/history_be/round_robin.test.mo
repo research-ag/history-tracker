@@ -106,6 +106,59 @@ do {
   assert li.itemsRemaining() == 3;
 };
 
+do {
+  Prim.debugPrint("RoundRobinBuffer :: view should return items without advancing cursor");
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
+  li.insertItem(10);
+  li.insertItem(20);
+  li.insertItem(30);
+
+  let viewIter = li.view();
+  assert viewIter.next() == ?10;
+  assert viewIter.next() == ?20;
+  assert li.ctr() == 0; // still unchanged
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: commit should advance cursor after view");
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
+  li.insertItem(10);
+  li.insertItem(20);
+  li.insertItem(30);
+
+  let viewIter = li.view();
+  ignore viewIter.next(); // ?10
+  ignore viewIter.next(); // ?20
+  li.commit(2); // manually advance
+
+  assert li.next() == ?30; // now we continue from third
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: commit should wrap around and increment round");
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
+  li.insertItem(1);
+  li.insertItem(2);
+  li.insertItem(3);
+
+  li.commit(3); // full round
+  assert li.ctr() == 0;
+  assert li.round() == 1;
+};
+
+do {
+  Prim.debugPrint("RoundRobinBuffer :: view after commit should start at new position");
+  let li = RoundRobin.RoundRobinBuffer<Nat>(null);
+  li.insertItem(1);
+  li.insertItem(2);
+  li.insertItem(3);
+
+  li.commit(1);
+  let viewIter = li.view();
+  assert viewIter.next() == ?2;
+  assert viewIter.next() == ?3;
+};
+
 // ================== RoundRobinNatGenerator tests ==================
 do {
   Prim.debugPrint("RoundRobinNatGenerator :: should return null if empty");
@@ -170,6 +223,51 @@ do {
   assert li.next() == null;
   assert li.next() == ?0;
   assert li.next() == null;
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: view should return items without advancing cursor");
+  let li = RoundRobin.RoundRobinNatGenerator(null);
+  li.setSize(3);
+
+  let viewIter = li.view();
+  assert viewIter.next() == ?0;
+  assert viewIter.next() == ?1;
+  assert li.ctr() == 0; // still unchanged
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: commit should advance cursor after view");
+  let li = RoundRobin.RoundRobinNatGenerator(null);
+  li.setSize(3);
+
+  let viewIter = li.view();
+  ignore viewIter.next(); // ?0
+  ignore viewIter.next(); // ?1
+  li.commit(2); // manually advance
+
+  assert li.next() == ?2; // now we continue from third
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: commit should wrap around and increment round");
+  let li = RoundRobin.RoundRobinNatGenerator(null);
+  li.setSize(3);
+
+  li.commit(3); // full round
+  assert li.ctr() == 0;
+  assert li.round() == 1;
+};
+
+do {
+  Prim.debugPrint("RoundRobinNatGenerator :: view after commit should start at new position");
+  let li = RoundRobin.RoundRobinNatGenerator(null);
+  li.setSize(3);
+
+  li.commit(1);
+  let viewIter = li.view();
+  assert viewIter.next() == ?1;
+  assert viewIter.next() == ?2;
 };
 
 // ================== roundRobinCollect tests ==================

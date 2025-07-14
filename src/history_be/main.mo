@@ -3,7 +3,6 @@ import Buffer "mo:base/Buffer";
 // import Debug "mo:base/Debug";
 import Error "mo:base/Error";
 import Int "mo:base/Int";
-import Iter "mo:base/Iter";
 import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Prim "mo:prim";
@@ -14,6 +13,7 @@ import Time "mo:base/Time";
 import Timer "mo:base/Timer";
 import ExtendedChange "history/extended_change";
 
+import Iter "mo:new-base/Iter";
 import Map "mo:new-base/pure/Map";
 import List "mo:new-base/List";
 import Queue "mo:new-base/Queue";
@@ -215,17 +215,17 @@ actor class HistoryTracker() = self {
 
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
 
-    func callItem(canisterIdx : Nat, register_fail_cb : () -> ()) : () {
+    func callItem(canisterIdx : Nat, register_cb : () -> ()) : () {
       let h = storage.get(canisterIdx);
       let ?canisterId = storage.canisterId(canisterIdx) else Prim.trap("Can never happen!");
       let item : Concurrent.Item = {
         call_arg = History.sync_call_arg(canisterId);
         register_call = func() {
+          register_cb();
           pt_syncAttempts.add(1);
           open_calls += 1;
           spawnedCalls += 1;
         };
-        register_fail_cb;
         process_response = func(info) {
           History.sync_call_process_response(h, info);
           h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
@@ -247,16 +247,10 @@ actor class HistoryTracker() = self {
     };
 
     // process backlog first
-    label l while (callsToSpawn > 0) {
-      switch (Queue.popFront(backlog)) {
-        case (?idx) {
-          if (not storage.get(idx).is_deleted) {
-            callItem(idx, func() = Queue.pushFront(backlog, idx));
-            callsToSpawn -= 1;
-          };
-        };
-        case (_) break l;
-      };
+    let backlogItems = Queue.values(backlog) |> Iter.take(_, callsToSpawn);
+    for (idx in backlogItems) {
+      callItem(idx, func() = ignore Queue.popFront(backlog));
+      callsToSpawn -= 1;
     };
 
     if (callsToSpawn > 0) {
@@ -276,15 +270,12 @@ actor class HistoryTracker() = self {
       |> List.map<Task.Task, (Task.Task, Nat)>(_, func(t) = (t, t.dataSource.round()));
 
       let dataSources : [Iter.Iter<Nat>] = tasksToRun
-      |> List.map<Task.Task, Iter.Iter<Nat>>(_, func(t) = t.dataSource)
+      |> List.map<Task.Task, Iter.Iter<Nat>>(_, func(t) = t.dataSource.view())
       |> List.toArray(_);
 
       let canistersToCall = RoundRobin.roundRobinCollect(dataSources, ?Nat.equal);
       label l for ((sourceIdx, canisterIdx) in canistersToCall) {
-        if (storage.get(canisterIdx).is_deleted) {
-          continue l;
-        };
-        callItem(canisterIdx, func() = List.get(tasksToRun, sourceIdx).dataSource.decCtr());
+        callItem(canisterIdx, func() = List.get(tasksToRun, sourceIdx).dataSource.commit(1));
         callsToSpawn -= 1;
         if (callsToSpawn == 0) {
           break l;
