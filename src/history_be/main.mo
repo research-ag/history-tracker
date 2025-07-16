@@ -203,6 +203,35 @@ actor class HistoryTracker() = self {
     #ok();
   };
 
+  func callItem(trigger_start_time : Nat64, canisterIdx : Nat, register_cb : () -> ()) : Concurrent.Item {
+    let h = storage.get(canisterIdx);
+    let ?canisterId = storage.canisterId(canisterIdx) else Prim.trap("Can never happen!");
+    {
+      call_arg = History.sync_call_arg(canisterId);
+      register_call = func() {
+        register_cb();
+        pt_syncAttempts.add(1);
+        open_calls += 1;
+      };
+      process_response = func(info) {
+        History.sync_call_process_response(h, info);
+        h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
+        pt_changesPerSync.update(info.recent_changes.size());
+        pt_syncSuccessDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
+        open_calls -= 1;
+      };
+      process_error = func(e) {
+        let error = History.sync_call_process_error(h, e);
+        switch (error) {
+          case (#Busy _) Queue.pushBack(backlog, canisterIdx);
+          case (_) {};
+        };
+        pt_syncFailureDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
+        open_calls -= 1;
+      };
+    };
+  };
+
   func trigger_sync() : async* () {
     pt_triggers.add(1);
     pt_openCalls.update(open_calls);
@@ -215,41 +244,18 @@ actor class HistoryTracker() = self {
 
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
 
-    func callItem(canisterIdx : Nat, register_cb : () -> ()) : () {
-      let h = storage.get(canisterIdx);
-      let ?canisterId = storage.canisterId(canisterIdx) else Prim.trap("Can never happen!");
-      let item : Concurrent.Item = {
-        call_arg = History.sync_call_arg(canisterId);
-        register_call = func() {
-          register_cb();
-          pt_syncAttempts.add(1);
-          open_calls += 1;
-          spawnedCalls += 1;
-        };
-        process_response = func(info) {
-          History.sync_call_process_response(h, info);
-          h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
-          pt_changesPerSync.update(info.recent_changes.size());
-          pt_syncSuccessDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
-          open_calls -= 1;
-        };
-        process_error = func(e) {
-          let error = History.sync_call_process_error(h, e);
-          switch (error) {
-            case (#Busy _) Queue.pushBack(backlog, canisterIdx);
-            case (_) {};
-          };
-          pt_syncFailureDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
-          open_calls -= 1;
-        };
-      };
-      calls.add(item);
-    };
-
     // process backlog first
     let backlogItems = Queue.values(backlog) |> Iter.take(_, callsToSpawn);
     for (idx in backlogItems) {
-      callItem(idx, func() = ignore Queue.popFront(backlog));
+      let call = callItem(
+        trigger_start_time,
+        idx,
+        func() {
+          ignore Queue.popFront(backlog);
+          spawnedCalls += 1;
+        },
+      );
+      calls.add(call);
       callsToSpawn -= 1;
     };
 
@@ -278,15 +284,18 @@ actor class HistoryTracker() = self {
         if (storage.get(canisterId).is_deleted) {
           continue l;
         };
-        callItem(
+        let call = callItem(
+          trigger_start_time,
           canisterId,
           func() {
             let taskSource = List.get(tasksToRun, sourceIdx).dataSource;
             if (taskSource.ctr() <= canisterTaskIdx) {
               taskSource.setCtr(canisterTaskIdx + 1);
             };
+            spawnedCalls += 1;
           },
         );
+        calls.add(call);
         callsToSpawn -= 1;
         if (callsToSpawn == 0) {
           break l;
