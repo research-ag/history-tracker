@@ -114,8 +114,8 @@ do {
   li.insertItem(30);
 
   let viewIter = li.view();
-  assert viewIter.next() == ?10;
-  assert viewIter.next() == ?20;
+  assert viewIter.next() == ?(0, 10);
+  assert viewIter.next() == ?(1, 20);
   assert li.ctr() == 0; // still unchanged
 };
 
@@ -127,9 +127,9 @@ do {
   li.insertItem(30);
 
   let viewIter = li.view();
-  ignore viewIter.next(); // ?10
-  ignore viewIter.next(); // ?20
-  li.commit(2); // manually advance
+  ignore viewIter.next(); // ?(0, 10)
+  ignore viewIter.next(); // ?(1, 20)
+  li.setCtr(2); // manually advance
 
   assert li.next() == ?30; // now we continue from third
 };
@@ -141,22 +141,22 @@ do {
   li.insertItem(2);
   li.insertItem(3);
 
-  li.commit(3); // full round
+  li.setCtr(3); // full round
   assert li.ctr() == 0;
   assert li.round() == 1;
 };
 
 do {
-  Prim.debugPrint("RoundRobinBuffer :: view after commit should start at new position");
+  Prim.debugPrint("RoundRobinBuffer :: view should start at latest position");
   let li = RoundRobin.RoundRobinBuffer<Nat>(null);
   li.insertItem(1);
   li.insertItem(2);
   li.insertItem(3);
 
-  li.commit(1);
+  li.setCtr(1);
   let viewIter = li.view();
-  assert viewIter.next() == ?2;
-  assert viewIter.next() == ?3;
+  assert viewIter.next() == ?(1, 2);
+  assert viewIter.next() == ?(2, 3);
 };
 
 // ================== RoundRobinNatGenerator tests ==================
@@ -231,8 +231,8 @@ do {
   li.setSize(3);
 
   let viewIter = li.view();
-  assert viewIter.next() == ?0;
-  assert viewIter.next() == ?1;
+  assert viewIter.next() == ?(0, 0);
+  assert viewIter.next() == ?(1, 1);
   assert li.ctr() == 0; // still unchanged
 };
 
@@ -242,9 +242,9 @@ do {
   li.setSize(3);
 
   let viewIter = li.view();
-  ignore viewIter.next(); // ?0
-  ignore viewIter.next(); // ?1
-  li.commit(2); // manually advance
+  ignore viewIter.next(); // ?(0, 0)
+  ignore viewIter.next(); // ?(1, 1)
+  li.setCtr(2); // manually advance
 
   assert li.next() == ?2; // now we continue from third
 };
@@ -254,20 +254,20 @@ do {
   let li = RoundRobin.RoundRobinNatGenerator(null);
   li.setSize(3);
 
-  li.commit(3); // full round
+  li.setCtr(3); // full round
   assert li.ctr() == 0;
   assert li.round() == 1;
 };
 
 do {
-  Prim.debugPrint("RoundRobinNatGenerator :: view after commit should start at new position");
+  Prim.debugPrint("RoundRobinNatGenerator :: view should start at latest position");
   let li = RoundRobin.RoundRobinNatGenerator(null);
   li.setSize(3);
 
-  li.commit(1);
+  li.setCtr(1);
   let viewIter = li.view();
-  assert viewIter.next() == ?1;
-  assert viewIter.next() == ?2;
+  assert viewIter.next() == ?(1, 1);
+  assert viewIter.next() == ?(2, 2);
 };
 
 // ================== roundRobinCollect tests ==================

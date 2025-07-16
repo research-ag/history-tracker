@@ -13,9 +13,10 @@ module {
     itemsRemaining : () -> Nat;
 
     // start viewing elements one by one, do not touch the progress pointer
-    view : () -> Iter.Iter<T>;
-    // advance pointer by N
-    commit : Nat -> ();
+    // returns item index and item
+    view : () -> Iter.Iter<(Nat, T)>;
+    // update pointer
+    setCtr : Nat -> ();
 
     resetProgress : () -> ();
   };
@@ -53,23 +54,23 @@ module {
       return null;
     };
 
-    public func view() : Iter.Iter<T> {
+    public func view() : Iter.Iter<(Nat, T)> {
       let baseCtr = ctr_;
       var i = 0;
       {
-        next = func() : ?T {
+        next = func() : ?(Nat, T) {
           let ctr = baseCtr + i;
           if (ctr < List.size(items_)) {
             i += 1;
-            return ?List.get(items_, ctr);
+            return ?(ctr, List.get(items_, ctr));
           };
           null;
         };
       };
     };
 
-    public func commit(n : Nat) {
-      ctr_ += n;
+    public func setCtr(ctr : Nat) {
+      ctr_ := ctr;
       if (ctr_ >= List.size(items_)) {
         round_ += 1;
         ctr_ := 0;
@@ -143,23 +144,23 @@ module {
       return null;
     };
 
-    public func view() : Iter.Iter<Nat> {
+    public func view() : Iter.Iter<(Nat, Nat)> {
       let baseCtr = ctr_;
       var i = 0;
       {
-        next = func() : ?Nat {
+        next = func() : ?(Nat, Nat) {
           let ctr = baseCtr + i;
           if (ctr < size_) {
             i += 1;
-            return ?ctr;
+            return ?(ctr, ctr);
           };
           null;
         };
       };
     };
 
-    public func commit(n : Nat) {
-      ctr_ += n;
+    public func setCtr(ctr : Nat) {
+      ctr_ := ctr;
       if (ctr_ >= size_) {
         round_ += 1;
         ctr_ := 0;

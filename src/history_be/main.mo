@@ -269,13 +269,24 @@ actor class HistoryTracker() = self {
       |> List.filter<Task.Task>(_, func(t) = t.dataSource.ctr() == 0 and t.dataSource.itemsRemaining() > 0)
       |> List.map<Task.Task, (Task.Task, Nat)>(_, func(t) = (t, t.dataSource.round()));
 
-      let dataSources : [Iter.Iter<Nat>] = tasksToRun
-      |> List.map<Task.Task, Iter.Iter<Nat>>(_, func(t) = t.dataSource.view())
+      let dataSources : [Iter.Iter<(Nat, Nat)>] = tasksToRun
+      |> List.map<Task.Task, Iter.Iter<(Nat, Nat)>>(_, func(t) = t.dataSource.view())
       |> List.toArray(_);
 
-      let canistersToCall = RoundRobin.roundRobinCollect(dataSources, ?Nat.equal);
-      label l for ((sourceIdx, canisterIdx) in canistersToCall) {
-        callItem(canisterIdx, func() = List.get(tasksToRun, sourceIdx).dataSource.commit(1));
+      let canistersToCall = RoundRobin.roundRobinCollect<(Nat, Nat)>(dataSources, ?(func((_, cidA), (_, cidB)) = Nat.equal(cidA, cidB)));
+      label l for ((sourceIdx, (canisterTaskIdx, canisterId)) in canistersToCall) {
+        if (storage.get(canisterId).is_deleted) {
+          continue l;
+        };
+        callItem(
+          canisterId,
+          func() {
+            let taskSource = List.get(tasksToRun, sourceIdx).dataSource;
+            if (taskSource.ctr() <= canisterTaskIdx) {
+              taskSource.setCtr(canisterTaskIdx + 1);
+            };
+          },
+        );
         callsToSpawn -= 1;
         if (callsToSpawn == 0) {
           break l;
