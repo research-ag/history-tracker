@@ -12,6 +12,7 @@ import LogLists "mo:stable-log-lists";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
 
+import DistributionPtValue "models/distribution_pt_value";
 import StableOrderedSet "models/stable_ordered_set";
 import History "history";
 import Metadata "history/metadata";
@@ -54,6 +55,8 @@ module {
     private var principalsSet : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(30, PB.toBlob, PB.toPrincipal);
     private var hashesSet : StableOrderedSet.StableOrderedSet<Blob> = StableOrderedSet.StableOrderedSet<Blob>(32, func x = x, func x = ?x);
     private var metadataMap : Map.Map<Nat, Metadata.Metadata> = data.metadataMap;
+
+    private var changesAmountDistribution : ?DistributionPtValue.DistributionPtValue = null;
 
     switch (data.storageMap) {
       case (?d) storageMap.unshare(d);
@@ -140,6 +143,7 @@ module {
       var ret : Nat64 = latestChangeTimestamp;
       let changes_size = info.recent_changes.size();
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
+      let oldChangesAmount = LogLists.size(changes, canisterIdx);
       for (change in info.recent_changes.vals()) {
         if (change.timestamp_nanos > latestChangeTimestamp) {
           LogLists.append(
@@ -160,6 +164,10 @@ module {
           ret := change.timestamp_nanos;
         };
         cur_change_index += 1;
+      };
+      switch (changesAmountDistribution) {
+        case (?cad) cad.updateEntry(oldChangesAmount, LogLists.size(changes, canisterIdx));
+        case (null) {};
       };
       ret;
     };
@@ -212,6 +220,11 @@ module {
       ignore pt.addPullValue("stable_map_leaf_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().leaf_count);
       ignore pt.addPullValue("stable_map_node_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().node_count);
 
+      let cad = DistributionPtValue.DistributionPtValue(pt, "changes_amount_distribution", "", [0, 1, 2, 3, 5, 10, 15, 20, 50, 100]);
+      for (i in List.keys(historyStorage)) {
+        cad.addEntry(LogLists.size(changes, i));
+      };
+      changesAmountDistribution := ?cad;
     };
 
     public func share() : StableDataV1 = {
