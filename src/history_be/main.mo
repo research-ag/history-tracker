@@ -31,7 +31,7 @@ import Concurrent "history/info/concurrent_calls";
 import Storage "./storage";
 import Tracker "./tracker";
 
-actor class HistoryTracker() = self {
+persistent actor class HistoryTracker() = self {
 
   module Errors {
     public type UpdateMetadata = {
@@ -47,14 +47,14 @@ actor class HistoryTracker() = self {
   };
 
   /// Number of canisters that are synchronized per iteration.
-  var canisters_num_to_sync = 100;
+  transient var canisters_num_to_sync = 100;
 
   /// A storage of history data
-  stable var storageDataV2 : Storage.StableDataV1 = Storage.defaultStableDataV1();
-  let storage : Storage.Storage = Storage.Storage(storageDataV2);
+  var storageDataV2 : Storage.StableDataV1 = Storage.defaultStableDataV1();
+  transient let storage : Storage.Storage = Storage.Storage(storageDataV2);
 
   /// Main task which loops over all of the canisters
-  stable var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
+  var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
     { size = 0; ctr = 0; round = 0 },
     {
       alias = "all_canisters";
@@ -64,19 +64,19 @@ actor class HistoryTracker() = self {
       var lastRoundDuration = 0;
     },
   );
-  let allCanistersTaskDataSource : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator(?allCanistersTaskData.0);
+  transient let allCanistersTaskDataSource : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator(?allCanistersTaskData.0);
   allCanistersTaskDataSource.setSize(storage.size());
-  let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
+  transient let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
 
   /// Custom tasks
-  stable var tasksData = Map.empty<Text, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>();
-  var tasks : Map.Map<Text, Task.BufferTask> = Map.map<Text, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState), Task.BufferTask>(
+  var tasksData = Map.empty<Text, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>();
+  transient var tasks : Map.Map<Text, Task.BufferTask> = Map.map<Text, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState), Task.BufferTask>(
     tasksData,
     func((_, td)) = Task.newBufferTask(td.1, RoundRobin.RoundRobinBuffer<Nat>(?td.0)),
   );
 
-  stable var trackerData : Tracker.StableDataV1 = Tracker.defaultStableDataV1();
-  let tracker : Tracker.Tracker = Tracker.Tracker(trackerData);
+  var trackerData : Tracker.StableDataV1 = Tracker.defaultStableDataV1();
+  transient let tracker : Tracker.Tracker = Tracker.Tracker(trackerData);
 
   func insertCanister(canisterId : Principal, history : History.History) : Nat {
     let id = storage.insertCanister(canisterId, history);
@@ -85,36 +85,36 @@ actor class HistoryTracker() = self {
     id;
   };
 
-  let canister_start_time = Time.now();
+  transient let canister_start_time = Time.now();
   func uptime() : Nat = Int.abs(Time.now() - canister_start_time) / 1_000_000_000;
 
   // must be 0 when canister was stopped, but we declare it stable to test whether that is true
-  var open_calls = 0;
+  transient var open_calls = 0;
 
   // During the testing phase we don't declare these stable
   // Resetting them to 0 makes it easier to interpret Grafana
-  var trapsDetected = 0;
+  transient var trapsDetected = 0;
 
-  let backlog = Queue.empty<Nat>();
+  transient let backlog = Queue.empty<Nat>();
 
   // PromTracker
-  let pt = PT.PromTracker("", 65);
+  transient let pt = PT.PromTracker("", 65);
   pt.addSystemValues();
   // gauges
   func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
-  let pt_syncSuccessDuration = pt.addGauge("canister_sync_success_duration", "", #both, logarithmic(10, 2, 1), false);
-  let pt_syncFailureDuration = pt.addGauge("canister_sync_failure_duration", "", #both, logarithmic(10, 2, 1), false);
-  let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
-  let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
-  let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
-  let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
+  transient let pt_syncSuccessDuration = pt.addGauge("canister_sync_success_duration", "", #both, logarithmic(10, 2, 1), false);
+  transient let pt_syncFailureDuration = pt.addGauge("canister_sync_failure_duration", "", #both, logarithmic(10, 2, 1), false);
+  transient let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
+  transient let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
+  transient let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
+  transient let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
   // counters
-  let pt_triggers = pt.addCounter("triggers_total", "", false);
-  let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
-  let pt_metadataUpdates = pt.addCounter("metadata_update_total", "", true);
-  let pt_unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
-  let pt_trigger_interval = pt.addCounter("trigger_interval", "", false);
+  transient let pt_triggers = pt.addCounter("triggers_total", "", false);
+  transient let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
+  transient let pt_metadataUpdates = pt.addCounter("metadata_update_total", "", true);
+  transient let pt_unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
+  transient let pt_trigger_interval = pt.addCounter("trigger_interval", "", false);
   // pull values constants
   ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
   // pull values variables
@@ -130,7 +130,7 @@ actor class HistoryTracker() = self {
     Task.registerMetrics(pt, task);
   };
 
-  stable var ptData : PT.StableData = null;
+  var ptData : PT.StableData = null;
   pt.unshare(ptData);
 
   public query func tracked_canisters_total() : async Nat = async storage.size();
@@ -259,24 +259,25 @@ actor class HistoryTracker() = self {
       callsToSpawn -= 1;
     };
 
+    var tasksToRun : List.List<(Task.Task, lastRound : Nat)> = List.empty();
+    var roundStartCandidates : List.List<(Task.Task, lastRound : Nat)> = List.empty();
+
     if (callsToSpawn > 0) {
-      var tasksToRun : List.List<Task.Task> = List.empty();
-      List.add(tasksToRun, allCanistersTask);
-      List.addAll(tasksToRun, Map.values(tasks));
+      List.add(tasksToRun, (allCanistersTask, allCanistersTask.dataSource.round()));
+      List.addAll(tasksToRun, Map.values(tasks) |> Iter.map<Task.Task, (Task.Task, Nat)>(_, func(t) = (t, t.dataSource.round())));
 
       // TODO rotate list of tasks each trigger, so with big amount of tasks (relatively to canisters_num_to_sync) all of them have progress
-      tasksToRun := List.filter<Task.Task>(
+      tasksToRun := List.filter<(Task.Task, Nat)>(
         tasksToRun,
-        func(t) = t.dataSource.ctr() > 0 or trigger_start_time >= t.roundStart + t.roundsInterval,
+        func(t, _) = t.dataSource.ctr() > 0 or trigger_start_time >= t.roundStart + t.roundsInterval,
       );
 
       // compile a list of tasks that about to start a new round
-      let roundStartCandidates : List.List<(Task.Task, lastRound : Nat)> = tasksToRun
-      |> List.filter<Task.Task>(_, func(t) = t.dataSource.ctr() == 0 and t.dataSource.itemsRemaining() > 0)
-      |> List.map<Task.Task, (Task.Task, Nat)>(_, func(t) = (t, t.dataSource.round()));
+      roundStartCandidates := tasksToRun
+      |> List.filter<(Task.Task, Nat)>(_, func(t, _) = t.dataSource.ctr() == 0 and t.dataSource.itemsRemaining() > 0);
 
       let dataSources : [Iter.Iter<(Nat, Nat)>] = tasksToRun
-      |> List.map<Task.Task, Iter.Iter<(Nat, Nat)>>(_, func(t) = t.dataSource.view())
+      |> List.map<(Task.Task, Nat), Iter.Iter<(Nat, Nat)>>(_, func(t, _) = t.dataSource.view())
       |> List.toArray(_);
 
       let canistersToCall = RoundRobin.roundRobinCollect<(Nat, Nat)>(dataSources, ?(func((_, cidA), (_, cidB)) = Nat.equal(cidA, cidB)));
@@ -288,9 +289,9 @@ actor class HistoryTracker() = self {
           trigger_start_time,
           canisterId,
           func() {
-            let taskSource = List.get(tasksToRun, sourceIdx).dataSource;
-            if (taskSource.ctr() <= canisterTaskIdx) {
-              taskSource.setCtr(canisterTaskIdx + 1);
+            let (task, initialRound) = List.get(tasksToRun, sourceIdx);
+            if (task.dataSource.ctr() <= canisterTaskIdx and task.dataSource.round() == initialRound) {
+              task.dataSource.setCtr(canisterTaskIdx + 1);
             };
             spawnedCalls += 1;
           },
@@ -301,25 +302,6 @@ actor class HistoryTracker() = self {
           break l;
         };
       };
-
-      // detect the start of a round
-      for ((t, lastRound) in List.values(roundStartCandidates)) {
-        if (t.dataSource.round() != lastRound or t.dataSource.ctr() > 0) {
-          t.roundStart := trigger_start_time;
-        };
-      };
-
-      // detect the end of a round
-      for (t in List.values(tasksToRun)) {
-        if (t.dataSource.ctr() == 0) {
-          t.lastRoundCompletedAt := trigger_start_time;
-          t.lastRoundDuration := trigger_start_time - t.roundStart;
-          switch (t.metrics.roundDurationGauge) {
-            case (?g) g.update(t.lastRoundDuration |> Nat64.toNat(_));
-            case (_) {};
-          };
-        };
-      };
     };
 
     await* Concurrent.make_calls(
@@ -327,9 +309,28 @@ actor class HistoryTracker() = self {
       func(i) { trapsDetected += 1 }, // trap_cb
     );
     pt_spawnedCalls.update(spawnedCalls);
+
+    // detect the start of a round
+    for ((t, initialRound) in List.values(roundStartCandidates)) {
+      if (t.dataSource.round() != initialRound or t.dataSource.ctr() > 0) {
+        t.roundStart := trigger_start_time;
+      };
+    };
+
+    // detect the end of a round
+    for ((t, _) in List.values(tasksToRun)) {
+      if (t.dataSource.ctr() == 0) {
+        t.lastRoundCompletedAt := trigger_start_time;
+        t.lastRoundDuration := trigger_start_time - t.roundStart;
+        switch (t.metrics.roundDurationGauge) {
+          case (?g) g.update(t.lastRoundDuration |> Nat64.toNat(_));
+          case (_) {};
+        };
+      };
+    };
   };
 
-  var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
+  transient var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
     #seconds 60,
     func() : async () { await* trigger_sync() },
   );
