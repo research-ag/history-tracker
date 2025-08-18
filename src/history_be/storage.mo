@@ -96,6 +96,10 @@ module {
         ignore LogLists.createList(changes);
       };
       List.add(historyStorage, history);
+      switch (changesAmountDistribution) {
+        case (?cad) cad.addEntry(0);
+        case (null) {};
+      };
       id;
     };
 
