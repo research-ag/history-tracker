@@ -224,7 +224,7 @@ module {
       ignore pt.addPullValue("stable_map_leaf_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().leaf_count);
       ignore pt.addPullValue("stable_map_node_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().node_count);
 
-      let cad = DistributionPtValue.DistributionPtValue(pt, "changes_amount_distribution", "", [0, 1, 2, 3, 5, 10, 15, 20, 50, 100]);
+      let cad = DistributionPtValue.DistributionPtValue(pt, "changes_amount_distribution", "");
       for (i in List.keys(historyStorage)) {
         cad.addEntry(LogLists.size(changes, i));
       };
