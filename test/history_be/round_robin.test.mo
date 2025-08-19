@@ -1,7 +1,7 @@
 import Nat "mo:base/Nat";
 import Prim "mo:prim";
 
-import Iter "mo:new-base/Iter";
+import Iter "mo:core/Iter";
 
 import RoundRobin "../../src/history_be/utils/round_robin";
 

@@ -1,7 +1,9 @@
-import Iter "mo:new-base/Iter";
-import List "mo:new-base/List";
-import Option "mo:new-base/Option";
-import Queue "mo:new-base/Queue";
+import Iter "mo:core/Iter";
+import List "mo:core/List";
+import Option "mo:core/Option";
+import Queue "mo:core/Queue";
+
+import Prim "mo:prim";
 
 module {
 
@@ -44,7 +46,7 @@ module {
 
     public func next() : ?T {
       if (ctr_ < List.size(items_)) {
-        let item = List.get(items_, ctr_);
+        let ?item = List.get(items_, ctr_) else Prim.trap("");
         ctr_ += 1;
         return ?item;
       } else if (ctr_ > 0) {
@@ -62,7 +64,8 @@ module {
           let ctr = baseCtr + i;
           if (ctr < List.size(items_)) {
             i += 1;
-            return ?(ctr, List.get(items_, ctr));
+            let ?item = List.get(items_, ctr) else Prim.trap("");
+            return ?(ctr, item);
           };
           null;
         };
@@ -78,7 +81,8 @@ module {
     };
 
     public func getItem(index : Nat) : T {
-      List.get(items_, index);
+      let ?item = List.get(items_, index) else Prim.trap("");
+      item;
     };
 
     public func insertItem(item : T) {

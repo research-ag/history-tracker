@@ -13,10 +13,10 @@ import Time "mo:base/Time";
 import Timer "mo:base/Timer";
 import ExtendedChange "history/extended_change";
 
-import Iter "mo:new-base/Iter";
-import Map "mo:new-base/pure/Map";
-import List "mo:new-base/List";
-import Queue "mo:new-base/Queue";
+import Iter "mo:core/Iter";
+import Map "mo:core/pure/Map";
+import List "mo:core/List";
+import Queue "mo:core/Queue";
 import PT "mo:promtracker";
 
 import Task "models/task";
@@ -289,7 +289,7 @@ persistent actor class HistoryTracker() = self {
           trigger_start_time,
           canisterId,
           func() {
-            let (task, initialRound) = List.get(tasksToRun, sourceIdx);
+            let ?(task, initialRound) = List.get(tasksToRun, sourceIdx) else Prim.trap("");
             if (task.dataSource.ctr() <= canisterTaskIdx and task.dataSource.round() == initialRound) {
               task.dataSource.setCtr(canisterTaskIdx + 1);
             };

@@ -1,6 +1,6 @@
-import Iter "mo:new-base/Iter";
-import List "mo:new-base/List";
-import Map "mo:new-base/pure/Map";
+import Iter "mo:core/Iter";
+import List "mo:core/List";
+import Map "mo:core/pure/Map";
 import Nat "mo:base/Nat";
 import Nat64 "mo:base/Nat64";
 import Option "mo:base/Option";
@@ -12,7 +12,6 @@ import LogLists "mo:stable-log-lists";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
 
-import DistributionPtValue "models/distribution_pt_value";
 import StableOrderedSet "models/stable_ordered_set";
 import History "history";
 import Metadata "history/metadata";
@@ -56,7 +55,7 @@ module {
     private var hashesSet : StableOrderedSet.StableOrderedSet<Blob> = StableOrderedSet.StableOrderedSet<Blob>(32, func x = x, func x = ?x);
     private var metadataMap : Map.Map<Nat, Metadata.Metadata> = data.metadataMap;
 
-    private var changesAmountDistribution : ?DistributionPtValue.DistributionPtValue = null;
+    private var changesAmountDistribution : ?PT.HeatmapValue = null;
 
     switch (data.storageMap) {
       case (?d) storageMap.unshare(d);
@@ -81,7 +80,10 @@ module {
     public func canisterId(canisterIdx : Nat) : ?Principal = storageMap.get(canisterIdx);
     public func canisterIndex(canisterId : Principal) : ?Nat = storageMap.indexOf(canisterId);
 
-    public func get(canisterIdx : Nat) : History.History = List.get(historyStorage, canisterIdx);
+    public func get(canisterIdx : Nat) : History.History {
+      let ?item = List.get(historyStorage, canisterIdx) else Prim.trap("");
+      item;
+    };
 
     public func insertCanister(canisterId : Principal, history : History.History) : Nat {
       let id = List.size(historyStorage);
@@ -224,7 +226,7 @@ module {
       ignore pt.addPullValue("stable_map_leaf_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().leaf_count);
       ignore pt.addPullValue("stable_map_node_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().node_count);
 
-      let cad = DistributionPtValue.DistributionPtValue(pt, "changes_amount_distribution", "");
+      let cad = pt.addHeatmap("changes_amount_distribution", "", false);
       for (i in List.keys(historyStorage)) {
         cad.addEntry(LogLists.size(changes, i));
       };
