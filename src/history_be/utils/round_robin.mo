@@ -1,18 +1,25 @@
-import Iter "mo:new-base/Iter";
-import List "mo:new-base/List";
-import Option "mo:new-base/Option";
-import Queue "mo:new-base/Queue";
+import Iter "mo:core/Iter";
+import List "mo:core/List";
+import Option "mo:core/Option";
+import Queue "mo:core/Queue";
+
+import Prim "mo:prim";
 
 module {
 
   // interface
-  public type RoundRobinSource<T> = {
+  public type RoundRobinSource<T> = Iter.Iter<T> and {
     ctr : () -> Nat;
-    decCtr : () -> ();
     round : () -> Nat;
     size : () -> Nat;
     itemsRemaining : () -> Nat;
-    next : () -> ?T;
+
+    // start viewing elements one by one, do not touch the progress pointer
+    // returns item index and item
+    view : () -> Iter.Iter<(Nat, T)>;
+    // update pointer
+    setCtr : Nat -> ();
+
     resetProgress : () -> ();
   };
 
@@ -31,13 +38,6 @@ module {
     var items_ : List.List<T> = List.empty();
 
     public func ctr() : Nat = ctr_;
-    public func decCtr() {
-      if (ctr_ > 0) {
-        ctr_ -= 1;
-      } else {
-        ctr_ := List.size(items_) - 1;
-      };
-    };
     public func round() : Nat = round_;
 
     public func size() : Nat = List.size(items_);
@@ -46,7 +46,7 @@ module {
 
     public func next() : ?T {
       if (ctr_ < List.size(items_)) {
-        let item = List.get(items_, ctr_);
+        let ?item = List.get(items_, ctr_) else Prim.trap("");
         ctr_ += 1;
         return ?item;
       } else if (ctr_ > 0) {
@@ -56,8 +56,33 @@ module {
       return null;
     };
 
+    public func view() : Iter.Iter<(Nat, T)> {
+      let baseCtr = ctr_;
+      var i = 0;
+      {
+        next = func() : ?(Nat, T) {
+          let ctr = baseCtr + i;
+          if (ctr < List.size(items_)) {
+            i += 1;
+            let ?item = List.get(items_, ctr) else Prim.trap("");
+            return ?(ctr, item);
+          };
+          null;
+        };
+      };
+    };
+
+    public func setCtr(ctr : Nat) {
+      ctr_ := ctr;
+      if (ctr_ >= List.size(items_)) {
+        round_ += 1;
+        ctr_ := 0;
+      };
+    };
+
     public func getItem(index : Nat) : T {
-      List.get(items_, index);
+      let ?item = List.get(items_, index) else Prim.trap("");
+      item;
     };
 
     public func insertItem(item : T) {
@@ -104,13 +129,6 @@ module {
     var size_ : Nat = 0;
 
     public func ctr() : Nat = ctr_;
-    public func decCtr() {
-      if (ctr_ > 0) {
-        ctr_ -= 1;
-      } else {
-        ctr_ := size_ - 1;
-      };
-    };
     public func round() : Nat = round_;
 
     public func size() : Nat = size_;
@@ -128,6 +146,29 @@ module {
         ctr_ := 0;
       };
       return null;
+    };
+
+    public func view() : Iter.Iter<(Nat, Nat)> {
+      let baseCtr = ctr_;
+      var i = 0;
+      {
+        next = func() : ?(Nat, Nat) {
+          let ctr = baseCtr + i;
+          if (ctr < size_) {
+            i += 1;
+            return ?(ctr, ctr);
+          };
+          null;
+        };
+      };
+    };
+
+    public func setCtr(ctr : Nat) {
+      ctr_ := ctr;
+      if (ctr_ >= size_) {
+        round_ += 1;
+        ctr_ := 0;
+      };
     };
 
     public func resetProgress() {

@@ -49,20 +49,30 @@ module History {
 
   public func sync(canister_id : Principal, history : History) : async* R.Result<IC.CanisterInfoResponse, TrackError> {
     try {
-      let info = await ic.canister_info({
-        canister_id = canister_id;
-        num_requested_changes = ?20;
-      });
-      history.total_num_changes := info.total_num_changes;
-      history.timestamp_nanos := Prim.time();
-      history.sync_version += 1;
+      let info = await ic.canister_info(sync_call_arg(canister_id));
+      sync_call_process_response(history, info);
       #ok(info);
     } catch (e) {
-      switch (Error.code(e)) {
-        case (#destination_invalid) history.is_deleted := true;
-        case (_) {};
-      };
-      #err(track_error(e));
+      #err(sync_call_process_error(history, e));
     };
+  };
+
+  public func sync_call_arg(canister_id : Principal) : IC.CanisterInfoRequest = {
+    canister_id;
+    num_requested_changes = ?Nat64.fromNat(20);
+  };
+
+  public func sync_call_process_response(history : History, info : IC.CanisterInfoResponse) {
+    history.total_num_changes := info.total_num_changes;
+    history.timestamp_nanos := Prim.time();
+    history.sync_version += 1;
+  };
+
+  public func sync_call_process_error(history : History, e : Error.Error) : TrackError {
+    switch (Error.code(e)) {
+      case (#destination_invalid) history.is_deleted := true;
+      case (_) {};
+    };
+    track_error(e);
   };
 };
