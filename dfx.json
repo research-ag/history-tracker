@@ -20,7 +20,12 @@
           "ts"
         ],
         "output": "./declarations/history_be"
-      }
+      },
+      "args" : "--enhanced-orthogonal-persistence"
+    },
+    "history_be_2": {
+      "main": "./src/history_be/main.mo",
+      "type": "motoko"
     },
     "history_fe": {
       "type": "assets",

@@ -10,7 +10,7 @@ import Result "mo:base/Result";
 import Vector "mo:vector/Class";
 import Prim "mo:prim";
 
-actor class () = self {
+persistent actor class () = self {
 
   public type WasmMetadata = {
     module_hash : Blob;
@@ -40,10 +40,10 @@ actor class () = self {
     var wasm_metadata_storage : OrderedMap.Map<Blob, WasmMetadata>;
   };
 
-  let principalMap = OrderedMap.Make<Principal>(Principal.compare);
-  let blobMap = OrderedMap.Make<Blob>(Blob.compare);
+  transient let principalMap = OrderedMap.Make<Principal>(Principal.compare);
+  transient let blobMap = OrderedMap.Make<Blob>(Blob.compare);
 
-  stable var storage : OrderedMap.Map<Principal, PrincipalRecord> = principalMap.empty<PrincipalRecord>();
+  var storage : OrderedMap.Map<Principal, PrincipalRecord> = principalMap.empty<PrincipalRecord>();
 
   //
   // API for Metadata directory management

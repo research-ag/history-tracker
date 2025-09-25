@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "react-query";
-import { useSnackbar } from "notistack";
+import { enqueueSnackbar, useSnackbar } from "notistack";
 import { Principal } from "@dfinity/principal";
 import {
   ActorSubclass,
@@ -31,6 +31,7 @@ import {
   parseUint8ArrayToText,
   resolveDataOrNullError,
   resolveResult,
+  resolveTrackManyResult,
 } from "./utils";
 
 export const BACKEND_CANISTER_ID = canisterId;
@@ -116,12 +117,16 @@ export const useGetIsCanisterTracked = (
 };
 
 export const useTrack = () => {
+  const queryClient = useQueryClient();
   const { backend } = useHistoryBackend();
   const { enqueueSnackbar } = useSnackbar();
   return useMutation(
     (canisterId: Principal) => backend.track(canisterId).then(resolveResult),
     {
       onSuccess: () => {
+        queryClient.invalidateQueries(["total-canisters"]);
+        queryClient.invalidateQueries(["tracking-stats"]);
+
         enqueueSnackbar("The canister has been successfully registered", {
           variant: "success",
         });
@@ -133,6 +138,87 @@ export const useTrack = () => {
       },
     }
   );
+};
+
+export const useTrackMany = () => {
+  const queryClient = useQueryClient();
+  const { backend } = useHistoryBackend();
+  const { enqueueSnackbar } = useSnackbar();
+  return useMutation(
+    (canisterIds: Array<Principal>) =>
+      backend
+        .trackMany(canisterIds)
+        .then((res) => resolveTrackManyResult(res, canisterIds)),
+    {
+      onSuccess: (data) => {
+        queryClient.invalidateQueries(["total-canisters"]);
+        queryClient.invalidateQueries(["tracking-stats"]);
+
+        const total = data.length;
+        const successful = data.reduce((acc, item) => acc + Number(item.ok), 0);
+
+        if (total === successful) {
+          enqueueSnackbar(`Successfully tracked ${successful} canisters`, {
+            variant: "success",
+          });
+        } else if (successful !== 0) {
+          enqueueSnackbar(
+            `Tracked ${successful} canisters, ${total - successful} failed`,
+            {
+              variant: "warning",
+            }
+          );
+        } else {
+          enqueueSnackbar(`Failed to track all ${total} canisters`, {
+            variant: "error",
+          });
+        }
+      },
+      onError: () => {
+        enqueueSnackbar("Failed to track the canisters", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+export const useGetTrackedCanistersTotal = () => {
+  const { backend } = useHistoryBackend();
+  return useQuery(
+    ["total-canisters"],
+    () => backend.tracked_canisters_total(),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the tracked canisters total", {
+          variant: "error",
+        });
+      },
+    }
+  );
+};
+
+export const useGetTrackingStats = () => {
+  const { backend } = useHistoryBackend();
+  return useQuery(["tracking-stats"], () => backend.get_tracking_stats(), {
+    onError: () => {
+      enqueueSnackbar("Failed to fetch tracking stats", {
+        variant: "error",
+      });
+    },
+  });
+};
+
+export const useGetLastRoundDetails = () => {
+  const { backend } = useHistoryBackend();
+  const { enqueueSnackbar } = useSnackbar();
+  return useQuery(["last-round-details"], () => backend.last_round_details(), {
+    onError: () => {
+      enqueueSnackbar("Failed to fetch the last round details", {
+        variant: "error",
+      });
+    },
+  });
 };
 
 export const useGetCanisterChanges = (canisterId: Principal) => {
