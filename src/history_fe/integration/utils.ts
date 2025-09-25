@@ -1,3 +1,5 @@
+import { Principal } from "@dfinity/principal";
+
 export const arrayBufferToHex = (buffer: ArrayBuffer): string => {
   const byteArray = new Uint8Array(buffer);
   const hexParts: string[] = [];
@@ -27,6 +29,33 @@ export const resolveResult = <
     throw new Error(msg);
   }
   return result.ok;
+};
+
+// Resolves trackMany result item
+export const resolveTrackManyResult = <
+  R,
+  E extends { [x: string]: { message: string } }
+>(
+  resultItems: Array<{ ok: R } | { err: E }>,
+  canisterIds: Array<Principal>
+): Array<
+  { canisterId: string } & (
+    | { ok: true; data: R }
+    | { ok: false; data: { message: string } }
+  )
+> => {
+  return resultItems.map((res, i) => {
+    if ("err" in res) {
+      const key = Object.keys(res.err)[0];
+      const msg = res.err[key].message;
+      return {
+        canisterId: canisterIds[i].toText(),
+        ok: false,
+        data: res.err[key],
+      };
+    }
+    return { canisterId: canisterIds[i].toText(), ok: true, data: res.ok };
+  });
 };
 
 export const resolveDataOrNullError = <T>(data: [] | [T]): T => {

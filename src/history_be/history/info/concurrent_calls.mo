@@ -13,28 +13,25 @@ module {
 
   type BufferItem = (async Call.Response, Call.Response -> (), Error.Error -> ());
 
-  // first version, not robust against traps in the process result function
-  // if such a trap happens then the subsequent futures are lost
-  // may be ok for certain applications if the calls are idemponent and will get repeated later
   public func make_calls(calls : [Item], trap_cb : Nat -> ()) : async* () {
     let futures = Buffer.Buffer<(async Call.Response, Call.Response -> (), Error.Error -> ())>(calls.size());
-    label L for (c in calls.vals()) {
+    label L for (i in calls.keys()) {
+      let c = calls[i];
       try {
         futures.add((Call.f(c.call_arg), c.process_response, c.process_error));
         c.register_call(); // register that call was scheduled
       } catch _ {
-        break L
         // stop scheduling more calls
+        break L;
       };
     };
-    // the calls will all get sent with the first await below
     // now process the responses
     var i = 0;
     while (i < futures.size()) {
       let fut = futures.get(i);
       var trapDetected = true;
       try {
-        fut.1 (await fut.0);
+        fut.1 (await? fut.0);
         trapDetected := false;
       } catch e {
         fut.2 (e);

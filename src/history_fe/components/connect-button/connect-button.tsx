@@ -1,20 +1,30 @@
 import { useEffect, useLayoutEffect, useState } from "react";
 import { AuthClient } from "@dfinity/auth-client";
-import { Button } from "@mui/joy";
+import { Button, IconButton, useTheme } from "@mui/joy";
 import { SxProps } from "@mui/joy/styles/types";
+import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
+import LoginIcon from "@mui/icons-material/Login";
+import LogoutIcon from "@mui/icons-material/Logout";
 
 import { useIdentity } from "@fe/integration/identity";
 
 interface ConnectButtonProps {
   sx?: SxProps;
+  iconButtonOnMobile?: boolean;
 }
 
-const ConnectButton = ({ sx }: ConnectButtonProps) => {
+const ConnectButton = ({ sx, iconButtonOnMobile }: ConnectButtonProps) => {
+  const theme = useTheme();
+
+  const downSm = useMediaQuery(theme.breakpoints.down("sm"));
+
   const [authClient, setAuthClient] = useState<AuthClient | null>(null);
 
   const { identity, setIdentity } = useIdentity();
 
   const isConnected = identity.getPrincipal().toText() !== "2vxsx-fae";
+
+  const isIconButton = iconButtonOnMobile && downSm;
 
   useLayoutEffect(() => {
     AuthClient.create().then(setAuthClient);
@@ -65,7 +75,7 @@ const ConnectButton = ({ sx }: ConnectButtonProps) => {
     });
   };
 
-  return (
+  return !isIconButton ? (
     <Button
       sx={sx}
       onClick={!isConnected ? handleConnect : handleDisconnect}
@@ -73,6 +83,15 @@ const ConnectButton = ({ sx }: ConnectButtonProps) => {
     >
       {!isConnected ? "Connect" : "Disconnect"}
     </Button>
+  ) : (
+    <IconButton
+      sx={sx}
+      variant="solid"
+      color={!isConnected ? "success" : "danger"}
+      onClick={!isConnected ? handleConnect : handleDisconnect}
+    >
+      {!isConnected ? <LoginIcon /> : <LogoutIcon />}
+    </IconButton>
   );
 };
 
