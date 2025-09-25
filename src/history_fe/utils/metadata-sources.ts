@@ -2,27 +2,13 @@ import { useEffect } from "react";
 import { atom, useAtom } from "jotai";
 import { Principal } from "@dfinity/principal";
 
+import {
+  principalsToText,
+  textToPrincipals,
+  validatePrincipals,
+} from "./principal";
+
 const LS_KEY = "HISTORY_TRACKER_METADATA_SOURCES";
-
-export const validateMetadataSources = (value: string) => {
-  const principalsText = value.split("\n").filter((str) => !!str);
-  return principalsText.every((p) => {
-    try {
-      Principal.fromText(p);
-      return true;
-    } catch (_) {
-      return false;
-    }
-  });
-};
-
-export const principalsToText = (principals: Array<Principal>) =>
-  principals.map((p) => p.toText()).join("\n");
-
-export const textToPrincipals = (sourcesRaw: string) =>
-  [...new Set(sourcesRaw.split("\n").filter((str) => !!str))].map((str) =>
-    Principal.fromText(str)
-  );
 
 const metadataSourcesAtom = atom<Array<Principal>>([]);
 
@@ -32,7 +18,7 @@ export const useMetadataSources = () => {
 
   useEffect(() => {
     const sourcesRaw = localStorage.getItem(LS_KEY);
-    if (typeof sourcesRaw === "string" && validateMetadataSources(sourcesRaw)) {
+    if (typeof sourcesRaw === "string" && validatePrincipals(sourcesRaw)) {
       const principals = textToPrincipals(sourcesRaw);
       _setMetadataSources(principals);
     }

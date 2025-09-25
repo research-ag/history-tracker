@@ -14,6 +14,7 @@ module {
     #code_deployment : CodeDeploymentRecord;
     #controllers_change : CreationRecord;
     #code_uninstall;
+    #load_snapshot : SnapshotRecord;
   };
 
   type CanisterChangeOrigin = {
@@ -31,7 +32,7 @@ module {
     module_hash : Blob;
   };
 
-  type CanisterInstallMode = {
+  public type CanisterInstallMode = {
     #reinstall;
     #upgrade;
     #install;
@@ -39,6 +40,12 @@ module {
 
   type CreationRecord = {
     controllers : [Principal];
+  };
+
+  public type SnapshotRecord = {
+    canister_version : Nat64;
+    snapshot_id : Blob;
+    taken_at_timestamp : Nat64;
   };
 
   public type CanisterInfoRequest = {
