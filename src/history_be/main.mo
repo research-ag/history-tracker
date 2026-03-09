@@ -289,7 +289,7 @@ persistent actor class HistoryTracker() = self {
           trigger_start_time,
           canisterId,
           func() {
-            let ?(task, initialRound) = List.get(tasksToRun, sourceIdx) else Prim.trap("");
+            let ?(task, initialRound) = List.get(tasksToRun, sourceIdx) else Prim.trap("Could not get task from list");
             if (task.dataSource.ctr() <= canisterTaskIdx and task.dataSource.round() == initialRound) {
               task.dataSource.setCtr(canisterTaskIdx + 1);
             };
