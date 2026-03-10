@@ -12,7 +12,7 @@ module ExtendedChange {
   };
 
   /// A change record which we store in the memory
-  private type StableExtendedChange = {
+  public type StableExtendedChange = {
     change_index : Nat;
     // IC.CanisterChange below  with mapped principals and module hashes to indexes (Nat)
     timestamp_nanos : Nat64;
