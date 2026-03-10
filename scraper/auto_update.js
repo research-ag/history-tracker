@@ -15,14 +15,17 @@ let newCanisterIds = new Set();
 
 const push = async () => {
     const cids = Array.from(newCanisterIds);
-    console.log(`Pushing ${cids.length} new canister IDs`);
     while (true) {
         try {
             const response = execSync(`dfx canister call ${TRACKER_CANISTER_ID} trackMany "(null, vec { ${cids.map(id => `principal \\"${id}\\"`).join('; ')} })"  --output json --ic`, {encoding: 'utf8'});
             const ret = JSON.parse(response);
             for (let i = 0; i < ret.length; i++) {
-                if (ret[i].err && 'DoesNotExist' in ret[i].err) {
-                    fs.appendFileSync('deleted_canister_ids.txt', `${cids[i]}\n`);
+                if (ret[i].err) {
+                    if ('DoesNotExist' in ret[i].err) {
+                        fs.appendFileSync('deleted_canister_ids.txt', `${cids[i]}\n`);
+                    } else {
+                        console.error(`Error while pushing canister ${cids[i]}: ${JSON.stringify(ret[i].err)}`);
+                    }
                 }
             }
             break;
@@ -106,7 +109,6 @@ setTimeout(async () => {
 
     while (true) {
         try {
-            console.log('Fetching batch with offset:', skip);
             const response = await fetchCanisters(LIMIT, skip);
             if (!response.data || !Array.isArray(response.data)) {
                 console.error('Unexpected API response format');
