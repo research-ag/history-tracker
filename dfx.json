@@ -21,11 +21,12 @@
         ],
         "output": "./declarations/history_be"
       },
-      "args" : "--enhanced-orthogonal-persistence"
+      "args" : "--enhanced-orthogonal-persistence --max-stable-pages 131072"
     },
     "history_be_2": {
       "main": "./src/history_be/main.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "args" : "--enhanced-orthogonal-persistence --max-stable-pages 131072"
     },
     "history_fe": {
       "type": "assets",
