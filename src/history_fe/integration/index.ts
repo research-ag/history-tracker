@@ -147,7 +147,7 @@ export const useTrackMany = () => {
   return useMutation(
     (canisterIds: Array<Principal>) =>
       backend
-        .trackMany(canisterIds)
+        .trackMany([], canisterIds)
         .then((res) => resolveTrackManyResult(res, canisterIds)),
     {
       onSuccess: (data) => {
@@ -212,7 +212,7 @@ export const useGetTrackingStats = () => {
 export const useGetLastRoundDetails = () => {
   const { backend } = useHistoryBackend();
   const { enqueueSnackbar } = useSnackbar();
-  return useQuery(["last-round-details"], () => backend.last_round_details(), {
+  return useQuery(["last-round-details"], () => backend.last_round_details([]), {
     onError: () => {
       enqueueSnackbar("Failed to fetch the last round details", {
         variant: "error",

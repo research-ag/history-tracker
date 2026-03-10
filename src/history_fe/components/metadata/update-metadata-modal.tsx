@@ -22,7 +22,7 @@ import {
 
 import { useUpdateCanisterMetadata } from "@fe/integration";
 import ErrorAlert from "@fe/components/error-alert";
-import { Metadata } from "@declarations/history_be/history_be.did";
+import { SharedMetadata } from "@declarations/history_be/history_be.did";
 
 interface UpdateMetadataFormValues {
   name: string;
@@ -31,7 +31,7 @@ interface UpdateMetadataFormValues {
 
 interface UpdateMetadataModalProps {
   canisterId: Principal;
-  metadata: Metadata;
+  metadata: SharedMetadata;
   isOpen: boolean;
   onClose: () => void;
 }

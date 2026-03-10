@@ -11,4 +11,4 @@ test = "2.0.0"
 
 [toolchain]
 moc = "0.14.13"
-wasmtime = "42.0.1"
+wasmtime = "42.0.0"
