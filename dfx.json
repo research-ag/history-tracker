@@ -44,7 +44,7 @@
     "internet_identity": {
       "type": "custom",
       "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
-      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_production.wasm.gz",
       "remote": {
         "candid": "did/internet_identity.did",
         "id": {
@@ -65,5 +65,6 @@
     }
   },
   "version": 1,
+  "dfx": "0.31.0",
   "output_env_file": ".env"
 }

@@ -5,8 +5,8 @@ module {
   public type CanisterChange = {
     timestamp_nanos : Nat64;
     canister_version : Nat64;
-    origin : CanisterChangeOrigin;
-    details : CanisterChangeDetails;
+    origin : ?CanisterChangeOrigin;
+    details : ?CanisterChangeDetails;
   };
 
   type CanisterChangeDetails = {
