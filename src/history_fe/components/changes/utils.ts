@@ -55,8 +55,9 @@ export const getNumberOfResets = (
   changes: Array<ExtendedChange> // sorted by ascending indexes
 ): NumberOfResetsResult => {
   const installs = changes.reduce<number>((acc, change) => {
-    if ("code_deployment" in change.details) {
-      const { mode } = change.details.code_deployment;
+    if (change.details.length === 0) return acc;
+    if ("code_deployment" in change.details[0]) {
+      const { mode } = change.details[0].code_deployment;
       if ("reinstall" in mode) return acc + 1;
       if ("install" in mode) return acc + 1;
     }
@@ -82,8 +83,9 @@ export const getNumberOfResets = (
   let flag = false;
 
   for (let change of changes) {
-    if ("code_deployment" in change.details) {
-      const { mode } = change.details.code_deployment;
+    if (change.details.length === 0) continue;
+    if ("code_deployment" in change.details[0]) {
+      const { mode } = change.details[0].code_deployment;
       if ("reinstall" in mode) break;
       if ("install" in mode) break;
       flag = true;
@@ -150,8 +152,8 @@ export const getSummarySinceLastReset = (
   var changes: Array<ExtendedChange> = [...changes_];
 
   let baseIndex = changes.findLastIndex((change) => {
-    if ("code_deployment" in change.details) {
-      const { mode } = change.details.code_deployment;
+    if (change.details[0] && "code_deployment" in change.details[0]) {
+      const { mode } = change.details[0].code_deployment;
       return "reinstall" in mode || "install" in mode;
     }
     return false;
@@ -178,11 +180,12 @@ export const getHistoryControllers = (
 
   for (const change of changes) {
     let to_add: Array<Principal> = [];
-    if ("creation" in change.details) {
-      to_add = [...change.details.creation.controllers];
+    if (change.details.length === 0) continue;
+    if ("creation" in change.details[0]) {
+      to_add = [...change.details[0].creation.controllers];
     }
-    if ("controllers_change" in change.details) {
-      to_add = [...change.details.controllers_change.controllers];
+    if ("controllers_change" in change.details[0]) {
+      to_add = [...change.details[0].controllers_change.controllers];
     }
     for (const p of to_add) {
       if (controllersMap[p.toText()]) continue;

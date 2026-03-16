@@ -18,7 +18,7 @@ const ActionCell = ({
   metadataMap,
   onViewMetadata,
 }: ActionCellProps) => {
-  if ("creation" in change.details)
+  if (change.details[0] && "creation" in change.details[0])
     return (
       <ItemWithDetails
         title="Creation"
@@ -26,7 +26,7 @@ const ActionCell = ({
           <Box sx={{ overflowWrap: "break-word" }}>
             <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
             <Box component="ul">
-              {change.details.creation.controllers.map((c, i) => (
+              {change.details[0].creation.controllers.map((c, i) => (
                 <Box key={i} component="li">
                   {c.toText()}
                 </Box>
@@ -36,8 +36,8 @@ const ActionCell = ({
         }
       />
     );
-  if ("code_deployment" in change.details) {
-    const codeDeploymentRecord = change.details.code_deployment;
+  if (change.details[0] && "code_deployment" in change.details[0]) {
+    const codeDeploymentRecord = change.details[0].code_deployment;
     const getMode = () => {
       if ("reinstall" in codeDeploymentRecord.mode) return "Reinstall";
       if ("upgrade" in codeDeploymentRecord.mode) return "Upgrade";
@@ -105,7 +105,7 @@ const ActionCell = ({
       />
     );
   }
-  if ("controllers_change" in change.details)
+  if (change.details[0] && "controllers_change" in change.details[0])
     return (
       <ItemWithDetails
         title="Controllers change"
@@ -113,7 +113,7 @@ const ActionCell = ({
           <Box sx={{ overflowWrap: "break-word" }}>
             <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
             <Box component="ul">
-              {change.details.controllers_change.controllers.map((c, i) => (
+              {change.details[0].controllers_change.controllers.map((c, i) => (
                 <Box key={i} component="li">
                   {c.toText()}
                 </Box>
