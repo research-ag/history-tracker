@@ -148,6 +148,9 @@ module {
     ) : Nat64 {
       var ret : Nat64 = latestChangeTimestamp;
       let changes_size = info.recent_changes.size();
+      if (changes_size > Nat64.toNat(info.total_num_changes)) {
+        Prim.trap("Error while appending changes: recent changes size is " # debug_show changes_size # " while total_num_changes is " # debug_show info.total_num_changes # ". Canister id: " # debug_show (storageMap.get(canisterIdx)));
+      };
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
       let oldChangesAmount = LogLists.size(changes, canisterIdx);
       for (change in info.recent_changes.vals()) {
