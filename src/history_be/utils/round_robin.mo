@@ -42,7 +42,13 @@ module {
 
     public func size() : Nat = List.size(items_);
 
-    public func itemsRemaining() : Nat = List.size(items_) - ctr_;
+    public func itemsRemaining() : Nat {
+      let size_ = List.size(items_);
+      if (ctr_ > size_) {
+        Prim.trap("Ctr cannot be greater than size in RoundRobinBuffer");
+      };
+      size_ - ctr_;
+    };
 
     public func next() : ?T {
       if (ctr_ < List.size(items_)) {
@@ -134,7 +140,12 @@ module {
     public func size() : Nat = size_;
     public func setSize(v : Nat) = size_ := v;
 
-    public func itemsRemaining() : Nat = size_ - ctr_;
+    public func itemsRemaining() : Nat {
+      if (ctr_ > size_) {
+        Prim.trap("Ctr cannot be greater than size in RoundRobinNatGenerator");
+      };
+      size_ - ctr_;
+    };
 
     public func next() : ?Nat {
       if (ctr_ < size_) {
