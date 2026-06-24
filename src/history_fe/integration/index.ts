@@ -15,13 +15,13 @@ import { IDL } from "@dfinity/candid";
 import { decodeFirst, TagDecoder } from "cborg";
 
 import { canisterId, createActor } from "@declarations/history_be";
-import { _SERVICE } from "@declarations/history_be/history_be.did";
+import { _SERVICE, Result_1 } from "@declarations/history_be/history_be.did";
 import { BLACKHOLE_CANISTERS } from "@fe/constants/blackholeCanisters";
 import {
   canisterId as metadataDirectoryCanisterId,
   createActor as metadataDirectoryCreateActor,
 } from "@declarations/metadata_directory";
-import { _SERVICE as MD_SERVICE } from "@declarations/metadata_directory/metadata_directory.did";
+import { _SERVICE as MD_SERVICE, WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
 
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
@@ -147,10 +147,15 @@ export const useTrackMany = () => {
   return useMutation(
     (canisterIds: Array<Principal>) =>
       backend
-        .trackMany(canisterIds)
-        .then((res) => resolveTrackManyResult(res, canisterIds)),
+        .trackMany([], canisterIds)
+        .then((res: Result_1[]) => resolveTrackManyResult<null, { [x: string]: { message: string } }>(res, canisterIds)),
     {
-      onSuccess: (data) => {
+      onSuccess: (data: Array<
+        { canisterId: string } & (
+        | { ok: true; data: null }
+        | { ok: false; data: { message: string } }
+        )
+      >) => {
         queryClient.invalidateQueries(["total-canisters"]);
         queryClient.invalidateQueries(["tracking-stats"]);
 
@@ -212,7 +217,7 @@ export const useGetTrackingStats = () => {
 export const useGetLastRoundDetails = () => {
   const { backend } = useHistoryBackend();
   const { enqueueSnackbar } = useSnackbar();
-  return useQuery(["last-round-details"], () => backend.last_round_details(), {
+  return useQuery(["last-round-details"], () => backend.last_round_details([]), {
     onError: () => {
       enqueueSnackbar("Failed to fetch the last round details", {
         variant: "error",
@@ -660,7 +665,7 @@ export const useFindWasmMetadata = (
       moduleHash?.join(","),
       principals.map((p) => p.toText()).join(","),
     ],
-    () => metadataDirectory.find_wasm_metadata(moduleHash, principals),
+    () : Promise<Array<[Principal, WasmMetadata]>> => metadataDirectory.find_wasm_metadata(moduleHash, principals),
     {
       enabled,
       keepPreviousData: true,
@@ -690,7 +695,7 @@ export const useAvailableMetadata = ({
       principals.map((x) => x.toText()).join(","),
       moduleHashes.map((x) => x.join(",")).join(","),
     ],
-    () => metadataDirectory.available_metadata(principals, moduleHashes),
+    () : Promise<Array<[Principal, Uint8Array | number[], bigint]>>  => metadataDirectory.available_metadata(principals, moduleHashes),
     {
       onError: () => {
         enqueueSnackbar("Failed to get the available metadata", {

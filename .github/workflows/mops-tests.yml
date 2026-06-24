@@ -1,0 +1,32 @@
+name: Mops Tests (WASI)
+
+on:
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    name: Run mops tests (wasi)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install ic-mops
+        run: npm i -g ic-mops@0.45.3
+
+      - name: Install dependencies (mops)
+        run: mops install
+
+      - name: Setup Motoko toolchain (mops)
+        run: mops toolchain init
+
+      - name: Run tests (WASI)
+        run: mops test --mode wasi

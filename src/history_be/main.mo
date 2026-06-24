@@ -218,6 +218,9 @@ persistent actor class HistoryTracker() = self {
         h.latest_change_timestamp := storage.appendChanges(canisterIdx, h.latest_change_timestamp, info);
         pt_changesPerSync.update(info.recent_changes.size());
         pt_syncSuccessDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
+        if (open_calls == 0) {
+          Prim.trap("Open calls cannot be less than 0 in 'process_response'");
+        };
         open_calls -= 1;
       };
       process_error = func(e) {
@@ -227,6 +230,9 @@ persistent actor class HistoryTracker() = self {
           case (_) {};
         };
         pt_syncFailureDuration.update(Nat64.toNat(Prim.time() / 1_000_000_000 - trigger_start_time));
+        if (open_calls == 0) {
+          Prim.trap("Open calls cannot be less than 0 in 'process_error'");
+        };
         open_calls -= 1;
       };
     };
@@ -239,7 +245,7 @@ persistent actor class HistoryTracker() = self {
     pt_backlog.update(Queue.size(backlog));
 
     let trigger_start_time = Prim.time() / 1_000_000_000;
-    var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync - open_calls));
+    var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync : Int - open_calls));
     var spawnedCalls = 0;
 
     let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
@@ -289,7 +295,7 @@ persistent actor class HistoryTracker() = self {
           trigger_start_time,
           canisterId,
           func() {
-            let ?(task, initialRound) = List.get(tasksToRun, sourceIdx) else Prim.trap("");
+            let ?(task, initialRound) = List.get(tasksToRun, sourceIdx) else Prim.trap("Could not get task from list");
             if (task.dataSource.ctr() <= canisterTaskIdx and task.dataSource.round() == initialRound) {
               task.dataSource.setCtr(canisterTaskIdx + 1);
             };

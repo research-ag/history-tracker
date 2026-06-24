@@ -5,16 +5,30 @@ module {
   public type CanisterChange = {
     timestamp_nanos : Nat64;
     canister_version : Nat64;
-    origin : CanisterChangeOrigin;
-    details : CanisterChangeDetails;
+    origin : ?CanisterChangeOrigin;
+    details : ?CanisterChangeDetails;
   };
 
   type CanisterChangeDetails = {
-    #creation : CreationRecord;
+    #creation : {
+      controllers : [Principal];
+    };
     #code_deployment : CodeDeploymentRecord;
-    #controllers_change : CreationRecord;
+    #controllers_change : {
+      controllers : [Principal];
+    };
     #code_uninstall;
     #load_snapshot : SnapshotRecord;
+    #rename_canister : {
+      canister_id : Principal;
+      total_num_changes : Nat64;
+      rename_to : {
+        canister_id : Principal;
+        version : Nat64;
+        total_num_changes : Nat64;
+      };
+      requested_by : Principal;
+    };
   };
 
   type CanisterChangeOrigin = {
@@ -38,11 +52,8 @@ module {
     #install;
   };
 
-  type CreationRecord = {
-    controllers : [Principal];
-  };
-
   public type SnapshotRecord = {
+    from_canister_id : ?Principal;
     canister_version : Nat64;
     snapshot_id : Blob;
     taken_at_timestamp : Nat64;

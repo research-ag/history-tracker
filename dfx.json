@@ -21,11 +21,12 @@
         ],
         "output": "./declarations/history_be"
       },
-      "args" : "--enhanced-orthogonal-persistence"
+      "args" : "--enhanced-orthogonal-persistence --max-stable-pages 131072"
     },
     "history_be_2": {
       "main": "./src/history_be/main.mo",
-      "type": "motoko"
+      "type": "motoko",
+      "args" : "--enhanced-orthogonal-persistence --max-stable-pages 131072"
     },
     "history_fe": {
       "type": "assets",
@@ -43,7 +44,7 @@
     "internet_identity": {
       "type": "custom",
       "candid": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity.did",
-      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_dev.wasm.gz",
+      "wasm": "https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_production.wasm.gz",
       "remote": {
         "candid": "did/internet_identity.did",
         "id": {
@@ -64,5 +65,6 @@
     }
   },
   "version": 1,
+  "dfx": "0.31.0",
   "output_env_file": ".env"
 }
