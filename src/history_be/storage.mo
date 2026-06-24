@@ -1,3 +1,4 @@
+import Array "mo:core/Array";
 import Iter "mo:core/Iter";
 import List "mo:core/List";
 import Map "mo:core/pure/Map";
@@ -146,14 +147,31 @@ module {
       latestChangeTimestamp : Nat64,
       info : IC.CanisterInfoResponse,
     ) : Nat64 {
+      var recentChanges = info.recent_changes;
+      // if there was "rename" change, we cannot rely on total_num_changes anymore
+      // the solution is to filter out all of the events before last rename entry
+      var lastRenameEventIndex : ?Nat = null;
+      var i : Nat = recentChanges.size();
+      while (Option.isNull(lastRenameEventIndex) and i > 0) {
+        switch (recentChanges[i - 1].details) {
+          case (?#rename_canister _) lastRenameEventIndex := ?(i - 1);
+          case (_) {};
+        };
+        i -= 1;
+      };
+      switch (lastRenameEventIndex) {
+        case (?idx) recentChanges := Array.tabulate<IC.CanisterChange>(recentChanges.size() - idx, func(i) = recentChanges[i + idx]);
+        case (null) {};
+      };
+
       var ret : Nat64 = latestChangeTimestamp;
-      let changes_size = info.recent_changes.size();
+      let changes_size = recentChanges.size();
       if (changes_size > Nat64.toNat(info.total_num_changes)) {
         Prim.trap("Error while appending changes: recent changes size is " # debug_show changes_size # " while total_num_changes is " # debug_show info.total_num_changes # ". Canister id: " # debug_show (storageMap.get(canisterIdx)));
       };
       var cur_change_index : Nat = Nat64.toNat(info.total_num_changes) - changes_size + 1;
       let oldChangesAmount = LogLists.size(changes, canisterIdx);
-      for (change in info.recent_changes.vals()) {
+      for (change in recentChanges.vals()) {
         if (change.timestamp_nanos > latestChangeTimestamp) {
           LogLists.append(
             changes,
