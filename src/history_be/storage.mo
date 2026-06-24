@@ -150,18 +150,16 @@ module {
       var recentChanges = info.recent_changes;
       // if there was "rename" change, we cannot rely on total_num_changes anymore
       // the solution is to filter out all of the events before last rename entry
-      var lastRenameEventIndex : ?Nat = null;
       var i : Nat = recentChanges.size();
-      while (Option.isNull(lastRenameEventIndex) and i > 0) {
+      label L while (i > 0) {
         i -= 1;
         switch (recentChanges[i].details) {
-          case (?#rename_canister _) lastRenameEventIndex := ?i;
+          case (?#rename_canister _) break L;
           case (_) {};
         };
       };
-      switch (lastRenameEventIndex) {
-        case (?idx) recentChanges := Array.tabulate<IC.CanisterChange>(recentChanges.size() - idx, func(i) = recentChanges[i + idx]);
-        case (null) {};
+      if (i > 0) {
+        recentChanges := Array.tabulate<IC.CanisterChange>(recentChanges.size() - i, func(n) = recentChanges[n + i]);
       };
 
       var ret : Nat64 = latestChangeTimestamp;
