@@ -153,11 +153,11 @@ module {
       var lastRenameEventIndex : ?Nat = null;
       var i : Nat = recentChanges.size();
       while (Option.isNull(lastRenameEventIndex) and i > 0) {
-        switch (recentChanges[i - 1].details) {
-          case (?#rename_canister _) lastRenameEventIndex := ?(i - 1);
+        i -= 1;
+        switch (recentChanges[i].details) {
+          case (?#rename_canister _) lastRenameEventIndex := ?i;
           case (_) {};
         };
-        i -= 1;
       };
       switch (lastRenameEventIndex) {
         case (?idx) recentChanges := Array.tabulate<IC.CanisterChange>(recentChanges.size() - idx, func(i) = recentChanges[i + idx]);
