@@ -1,13 +1,13 @@
 [dependencies]
-core = "1.0.0"
+core = "2.5.0"
 vector = "0.4.6"
 promtracker = "https://github.com/research-ag/promtracker.git#e3cbfb50113b637ab7c4a4c6e0f3dbaa0c707ffd"
-stable-trie = "0.0.2"
+stable-trie = "0.0.8"
 stable-log-lists = "https://github.com/research-ag/stable-log-lists.git#30cba613fdcf7a459b53f5223198fdef832d81b1"
 
 [dev-dependencies]
-test = "2.0.0"
+test = "2.1.2"
 
 [toolchain]
-moc = "0.14.14"
+moc = "1.6.0"
 wasmtime = "42.0.0"

@@ -9,7 +9,8 @@
           "ts"
         ],
         "output": "./declarations/metadata_directory"
-      }
+      },
+      "args" : "--enhanced-orthogonal-persistence"
     },
     "history_be": {
       "main": "./src/history_be/main.mo",
