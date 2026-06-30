@@ -1,5 +1,5 @@
-import Iter "mo:base/Iter";
-import Option "mo:base/Option";
+import Iter "mo:core/Iter";
+import Option "mo:core/Option";
 import Prim "mo:prim";
 
 import Enumeration "mo:stable-trie/Enumeration";
@@ -13,7 +13,7 @@ module {
     deserializeValue : Blob -> ?T,
   ) {
 
-    var storage : Enumeration.Enumeration = Enumeration.Enumeration({
+    let storage : Enumeration.Enumeration = Enumeration.Enumeration({
       aridity = 4;
       pointer_size = 4;
       key_size = keySize;

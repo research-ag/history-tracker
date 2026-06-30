@@ -1,16 +1,15 @@
-import Array "mo:base/Array";
-import Buffer "mo:base/Buffer";
-// import Debug "mo:base/Debug";
-import Error "mo:base/Error";
-import Int "mo:base/Int";
-import Nat "mo:base/Nat";
-import Nat64 "mo:base/Nat64";
+import Array "mo:core/Array";
+import VarArray "mo:core/VarArray";
+import Error "mo:core/Error";
+import Int "mo:core/Int";
+import Nat "mo:core/Nat";
+import Nat64 "mo:core/Nat64";
 import Prim "mo:prim";
-import Principal "mo:base/Principal";
-import Result "mo:base/Result";
-import Text "mo:base/Text";
-import Time "mo:base/Time";
-import Timer "mo:base/Timer";
+import Principal "mo:core/Principal";
+import Result "mo:core/Result";
+import Text "mo:core/Text";
+import Time "mo:core/Time";
+import Timer "mo:core/Timer";
 import ExtendedChange "history/extended_change";
 
 import Iter "mo:core/Iter";
@@ -248,7 +247,7 @@ persistent actor class HistoryTracker() = self {
     var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync : Int - open_calls));
     var spawnedCalls = 0;
 
-    let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
+    let calls = List.empty<Concurrent.Item>();
 
     // process backlog first
     let backlogItems = Queue.values(backlog) |> Iter.take(_, callsToSpawn);
@@ -261,7 +260,7 @@ persistent actor class HistoryTracker() = self {
           spawnedCalls += 1;
         },
       );
-      calls.add(call);
+      List.add(calls, call);
       callsToSpawn -= 1;
     };
 
@@ -302,7 +301,7 @@ persistent actor class HistoryTracker() = self {
             spawnedCalls += 1;
           },
         );
-        calls.add(call);
+        List.add(calls, call);
         callsToSpawn -= 1;
         if (callsToSpawn == 0) {
           break l;
@@ -311,7 +310,7 @@ persistent actor class HistoryTracker() = self {
     };
 
     await* Concurrent.make_calls(
-      Buffer.toArray(calls),
+      List.toArray(calls),
       func(i) { trapsDetected += 1 }, // trap_cb
     );
     pt_spawnedCalls.update(spawnedCalls);
@@ -435,8 +434,8 @@ persistent actor class HistoryTracker() = self {
       let len = canister_ids.size();
       if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
 
-      let results = Array.init<Result.Result<(), History.TrackError>>(len, #ok());
-      let calls = Buffer.Buffer<(Nat, async Result.Result<(), History.TrackError>)>(len);
+      let results = VarArray.repeat<Result.Result<(), History.TrackError>>(#ok(), len);
+      let calls = List.empty<(Nat, async Result.Result<(), History.TrackError>)>();
 
       label L for (i in canister_ids.keys()) {
         let id = canister_ids[i];
@@ -445,13 +444,13 @@ persistent actor class HistoryTracker() = self {
           continue L;
         };
         try {
-          calls.add(i, syncCall(id));
+          List.add(calls, (i, syncCall(id)));
         } catch (_) {
           results[i] := #err(#Busy({ message = "Cannot schedule self-call" }));
         };
       };
 
-      for ((i, c) in calls.vals()) {
+      for ((i, c) in List.values(calls)) {
         results[i] := try {
           await c;
         } catch (e) {
@@ -459,14 +458,14 @@ persistent actor class HistoryTracker() = self {
         };
       };
 
-      Array.freeze(results);
+      Array.fromVarArray(results);
     };
 
     switch (taskAlias) {
       case (null) await* trackInMainTask_(canister_ids);
       case (?ta) {
         let ?task = Map.get(tasks, Text.compare, ta) else throw Error.reject("Task with provided alias not found");
-        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.thaw<Result.Result<(), History.TrackError>>(_);
+        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.toVarArray<Result.Result<(), History.TrackError>>(_);
         for (i in trackResult.keys()) {
           switch (trackResult[i]) {
             case (#ok or #err(#AlreadyTracked _)) {
@@ -481,7 +480,7 @@ persistent actor class HistoryTracker() = self {
             case (_) {};
           };
         };
-        Array.freeze(trackResult);
+        Array.fromVarArray(trackResult);
       };
     };
   };

@@ -1,5 +1,5 @@
-import Principal "mo:base/Principal";
-import Nat64 "mo:base/Nat64";
+import Principal "mo:core/Principal";
+import Nat64 "mo:core/Nat64";
 
 module {
   public type CanisterChange = {

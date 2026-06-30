@@ -1,8 +1,7 @@
-import Array "mo:base/Array";
-import Int "mo:base/Int";
-import Iter "mo:base/Iter";
-import Nat "mo:base/Nat";
-import Time "mo:base/Time";
+import VarArray "mo:core/VarArray";
+import Int "mo:core/Int";
+import Nat "mo:core/Nat";
+import Time "mo:core/Time";
 
 import PT "mo:promtracker";
 
@@ -15,7 +14,7 @@ module {
   };
 
   public func defaultStableDataV1() : StableDataV1 = {
-    buckets = Array.init<Nat>(MONTH_HOURS, 0);
+    buckets = VarArray.repeat<Nat>(0, MONTH_HOURS);
     headIndex = 0;
     lastRotation = Time.now();
   };
@@ -34,7 +33,7 @@ module {
 
   public class Tracker(data : StableDataV1) {
 
-    private var buckets : [var Nat] = data.buckets;
+    private let buckets : [var Nat] = data.buckets;
     private var headIndex = data.headIndex;
     private var lastRotation = data.lastRotation;
 
@@ -71,7 +70,7 @@ module {
 
     func sumBuckets(hours : Nat) : Nat {
       var sum = 0;
-      for (i in Iter.range(0, hours - 1)) {
+      for (i in Nat.range(0, hours)) {
         sum += buckets[getBucketIndex(i)];
       };
       sum;
@@ -85,7 +84,7 @@ module {
         // Clear only the new buckets we'll use
         let rotation_count = Nat.min(hours_passed, MONTH_HOURS);
         // Update head position
-        for (i in Iter.range(0, rotation_count - 1)) {
+        for (i in Nat.range(0, rotation_count)) {
           let newHead = (headIndex + (MONTH_HOURS - 1) : Nat) % MONTH_HOURS;
           buckets[newHead] := 0;
           headIndex := newHead;

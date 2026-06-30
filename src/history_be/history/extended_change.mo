@@ -1,5 +1,5 @@
-import Array "mo:base/Array";
-import Nat64 "mo:base/Nat64";
+import Array "mo:core/Array";
+import Nat64 "mo:core/Nat64";
 
 import IC "ic";
 

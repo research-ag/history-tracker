@@ -1,4 +1,4 @@
-import Nat "mo:base/Nat";
+import Nat "mo:core/Nat";
 import Prim "mo:prim";
 
 import Iter "mo:core/Iter";
@@ -273,7 +273,7 @@ do {
 // ================== roundRobinCollect tests ==================
 func bCreate(items : [Nat]) : RoundRobin.RoundRobinBuffer<Nat> {
   let b = RoundRobin.RoundRobinBuffer<Nat>(null);
-  for (item in items.vals()) {
+  for (item in items.values()) {
     b.insertItem(item);
   };
   b;
@@ -298,7 +298,7 @@ do {
 
 do {
   Prim.debugPrint("roundRobinCollect :: should work with regular iterables");
-  let res = RoundRobin.roundRobinCollect<Nat>([[0, 1, 2, 3, 4, 5, 6, 7].vals()], null) |> mapRes(_, 5);
+  let res = RoundRobin.roundRobinCollect<Nat>([[0, 1, 2, 3, 4, 5, 6, 7].values()], null) |> mapRes(_, 5);
   assert res.size() == 5;
   assert res == [0, 1, 2, 3, 4];
 };

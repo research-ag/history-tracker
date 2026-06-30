@@ -1,8 +1,8 @@
-import Error "mo:base/Error";
-import Nat64 "mo:base/Nat64";
-import Principal "mo:base/Principal";
+import Error "mo:core/Error";
+import Nat64 "mo:core/Nat64";
+import Principal "mo:core/Principal";
 import Prim "mo:prim";
-import R "mo:base/Result";
+import R "mo:core/Result";
 
 import IC "ic";
 

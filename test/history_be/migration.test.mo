@@ -1,7 +1,7 @@
 import Prim "mo:prim";
-import Array "mo:base/Array";
-import Nat "mo:base/Nat";
-import Blob "mo:base/Blob";
+import Array "mo:core/Array";
+import Nat "mo:core/Nat";
+import Blob "mo:core/Blob";
 import EC "../../src/history_be/history/extended_change";
 
 // ================== StableExtendedChange deserialization tests ==================

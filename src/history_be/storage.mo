@@ -2,12 +2,12 @@ import Array "mo:core/Array";
 import Iter "mo:core/Iter";
 import List "mo:core/List";
 import Map "mo:core/pure/Map";
-import Nat "mo:base/Nat";
-import Nat64 "mo:base/Nat64";
-import Option "mo:base/Option";
+import Nat "mo:core/Nat";
+import Nat64 "mo:core/Nat64";
+import Option "mo:core/Option";
 import Prim "mo:prim";
-import Principal "mo:base/Principal";
-import Region "mo:base/Region";
+import Principal "mo:core/Principal";
+import Region "mo:core/Region";
 
 import LogLists "mo:stable-log-lists";
 import Enumeration "mo:stable-trie/Enumeration";
@@ -51,9 +51,9 @@ module {
 
     private let historyStorage = data.historyStorage;
     private let changes = data.changes;
-    private var storageMap : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(10, Principal.toBlob, func x = ?Principal.fromBlob(x));
-    private var principalsSet : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(30, PB.toBlob, PB.toPrincipal);
-    private var hashesSet : StableOrderedSet.StableOrderedSet<Blob> = StableOrderedSet.StableOrderedSet<Blob>(32, func x = x, func x = ?x);
+    private let storageMap : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(10, Principal.toBlob, func x = ?Principal.fromBlob(x));
+    private let principalsSet : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(30, PB.toBlob, PB.toPrincipal);
+    private let hashesSet : StableOrderedSet.StableOrderedSet<Blob> = StableOrderedSet.StableOrderedSet<Blob>(32, func x = x, func x = ?x);
     private var metadataMap : Map.Map<Nat, Metadata.Metadata> = data.metadataMap;
 
     private var changesAmountDistribution : ?PT.HeatmapValue = null;

@@ -1,5 +1,5 @@
-import Buffer "mo:base/Buffer";
-import Error "mo:base/Error";
+import List "mo:core/List";
+import Error "mo:core/Error";
 
 import Call "single_call";
 
@@ -14,11 +14,11 @@ module {
   type BufferItem = (async Call.Response, Call.Response -> (), Error.Error -> ());
 
   public func make_calls(calls : [Item], trap_cb : Nat -> ()) : async* () {
-    let futures = Buffer.Buffer<(async Call.Response, Call.Response -> (), Error.Error -> ())>(calls.size());
+    let futures = List.empty<(async Call.Response, Call.Response -> (), Error.Error -> ())>();
     label L for (i in calls.keys()) {
       let c = calls[i];
       try {
-        futures.add((Call.f(c.call_arg), c.process_response, c.process_error));
+        List.add(futures, (Call.f(c.call_arg), c.process_response, c.process_error));
         c.register_call(); // register that call was scheduled
       } catch _ {
         // stop scheduling more calls
@@ -27,8 +27,8 @@ module {
     };
     // now process the responses
     var i = 0;
-    while (i < futures.size()) {
-      let fut = futures.get(i);
+    while (i < List.size(futures)) {
+      let fut = List.at(futures, i);
       var trapDetected = true;
       try {
         fut.1 (await? fut.0);
