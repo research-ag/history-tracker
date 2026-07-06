@@ -12,7 +12,7 @@ import Region "mo:core/Region";
 import LogLists "mo:stable-log-lists";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
-import { Tracker; Heatmap } "mo:promtracker";
+import { Heatmap } "mo:promtracker";
 
 import StableOrderedSet "models/stable_ordered_set";
 import History "history";
@@ -48,7 +48,7 @@ module {
     metadataMap = Map.empty();
   };
 
-  public class Storage(data : StableDataV1) {
+  public class Storage(data : StableDataV1, changesAmountDistribution: Heatmap.Heatmap) {
 
     private let historyStorage = data.historyStorage;
     private let changes = data.changes;
@@ -56,8 +56,6 @@ module {
     private let principalsSet : StableOrderedSet.StableOrderedSet<Principal> = StableOrderedSet.StableOrderedSet<Principal>(30, PB.toBlob, PB.toPrincipal);
     private let hashesSet : StableOrderedSet.StableOrderedSet<Blob> = StableOrderedSet.StableOrderedSet<Blob>(32, func x = x, func x = ?x);
     private var metadataMap : Map.Map<Nat, Metadata.Metadata> = data.metadataMap;
-
-    private var changesAmountDistribution : ?Heatmap.Heatmap = null;
 
     switch (data.storageMap) {
       case (?d) storageMap.unshare(d);
@@ -100,10 +98,7 @@ module {
         ignore LogLists.createList(changes);
       };
       List.add(historyStorage, history);
-      switch (changesAmountDistribution) {
-        case (?cad) cad.add(0);
-        case (null) {};
-      };
+      changesAmountDistribution.add(0);
       id;
     };
 
@@ -191,10 +186,7 @@ module {
         };
         cur_change_index += 1;
       };
-      switch (changesAmountDistribution) {
-        case (?cad) cad.update(oldChangesAmount, LogLists.size(changes, canisterIdx));
-        case (null) {};
-      };
+      changesAmountDistribution.update(oldChangesAmount, LogLists.size(changes, canisterIdx));
       ret;
     };
 
@@ -220,7 +212,7 @@ module {
       metadata.latest_update_timestamp := Prim.time();
     };
 
-    public func registerMetrics(pt : Tracker.Tracker, renderer : PT.Renderer) {
+    public func registerMetrics(renderer : PT.Renderer) {
       func getEnumerationPagesAllocated(data : Enumeration.StableData) : Nat {
         Nat64.toNat(Region.size(data.nodes.region) + Region.size(data.leaves.region));
       };
@@ -261,12 +253,6 @@ module {
           PT.newValue("stable_map_node_count", [], func() = hashesSet.memoryStats().node_count),
         ].bundle([("structure", "hashes_set")])
       );
-
-      let cad = pt.newHeatmap("changes_amount_distribution", []);
-      for (i in List.keys(historyStorage)) {
-        cad.add(LogLists.size(changes, i));
-      };
-      changesAmountDistribution := ?cad;
     };
 
     public func share() : StableDataV1 = {

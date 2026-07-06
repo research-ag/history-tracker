@@ -17,8 +17,10 @@ import Map "mo:core/pure/Map";
 import List "mo:core/List";
 import Queue "mo:core/Queue";
 import PT "mo:promtracker";
-import { Tracker; Counter; Gauge } "mo:promtracker";
+import { Tracker; Counter; Gauge; Heatmap } "mo:promtracker";
 import Http "mo:promtracker/mixins/http";
+
+import LogLists "mo:stable-log-lists";
 
 import Task "models/task";
 
@@ -51,7 +53,6 @@ persistent actor class HistoryTracker() = self {
 
   /// A storage of history data
   var storageDataV2 : Storage.StableDataV1 = Storage.defaultStableDataV1();
-  transient let storage : Storage.Storage = Storage.Storage(storageDataV2);
 
   /// Main task which loops over all of the canisters
   var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
@@ -65,8 +66,6 @@ persistent actor class HistoryTracker() = self {
     },
   );
   transient let allCanistersTaskDataSource : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator(?allCanistersTaskData.0);
-  allCanistersTaskDataSource.setSize(storage.size());
-  transient let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
 
   /// Custom tasks
   var tasksData = Map.empty<Text, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>();
@@ -108,18 +107,34 @@ persistent actor class HistoryTracker() = self {
   // gauges
   func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
-  transient let pt_syncSuccessDuration = pt.newGauge("canister_sync_success_duration", [], logarithmic(10, 2, 1));
-  transient let pt_syncFailureDuration = pt.newGauge("canister_sync_failure_duration", [], logarithmic(10, 2, 1));
-  transient let pt_changesPerSync = pt.newGauge("canister_changes_per_sync", [], linear(10, 2));
-  transient let pt_openCalls = pt.newGauge("trigger_open_calls", [], logarithmic(10, 2, 1));
-  transient let pt_backlog = pt.newGauge("trigger_backlog", [], logarithmic(10, 2, 1));
-  transient let pt_spawnedCalls = pt.newGauge("trigger_spawned_calls", [], logarithmic(10, 2, 1));
+  let pt_syncSuccessDuration = pt.newGauge("canister_sync_success_duration", [], logarithmic(10, 2, 1));
+  let pt_syncFailureDuration = pt.newGauge("canister_sync_failure_duration", [], logarithmic(10, 2, 1));
+  let pt_changesPerSync = pt.newGauge("canister_changes_per_sync", [], linear(10, 2));
+  let pt_openCalls = pt.newGauge("trigger_open_calls", [], logarithmic(10, 2, 1));
+  let pt_backlog = pt.newGauge("trigger_backlog", [], logarithmic(10, 2, 1));
+  let pt_spawnedCalls = pt.newGauge("trigger_spawned_calls", [], logarithmic(10, 2, 1));
   // counters
-  transient let pt_triggers = pt.newCounter("triggers_total", []);
-  transient let pt_syncAttempts = pt.newCounter("sync_attempts_total", []);
+  let pt_triggers = pt.newCounter("triggers_total", []);
+  let pt_syncAttempts = pt.newCounter("sync_attempts_total", []);
   let pt_metadataUpdates = pt.newCounter("metadata_update_total", []);
   let pt_unauthorizedMetadataUpdates = pt.newCounter("unauthorized_metadata_update_total", []);
-  transient let pt_trigger_interval = pt.newCounter("trigger_interval", []);
+  let pt_trigger_interval = pt.newCounter("trigger_interval", []);
+  // heatmaps
+  let changesAmountDistribution = pt.newHeatmap("changes_amount_distribution", []);
+
+  transient let storage : Storage.Storage = Storage.Storage(storageDataV2, changesAmountDistribution);
+
+  // refresh heatmap completely on canister upgrade (optional)
+  changesAmountDistribution.count := 0;
+  changesAmountDistribution.sum := 0;
+  changesAmountDistribution.buckets := [var];
+  for (i in List.keys(storageDataV2.historyStorage)) {
+    changesAmountDistribution.add(LogLists.size(storageDataV2.changes, i));
+  };
+
+  allCanistersTaskDataSource.setSize(storage.size());
+  transient let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
+
   // pull values
   renderer.addValue(
     [
@@ -132,7 +147,7 @@ persistent actor class HistoryTracker() = self {
   );
 
   tracker.registerMetrics(renderer);
-  storage.registerMetrics(pt, renderer);
+  storage.registerMetrics(renderer);
   Task.registerMetrics(allCanistersTask, pt, renderer);
   for (task in Map.values(tasks)) {
     Task.registerMetrics(task, pt, renderer);
@@ -499,6 +514,11 @@ persistent actor class HistoryTracker() = self {
       func((_, t)) = (t.dataSource.share(), t),
     );
     trackerData := tracker.share();
+
+    Task.deregisterMetrics(allCanistersTask, renderer);
+    for (task in Map.values(tasks)) {
+      Task.deregisterMetrics(task, renderer);
+    };
   };
 
 };
