@@ -51,10 +51,14 @@ module {
       };
     };
 
-    public func registerMetrics(pt : PT.PromTracker) {
-      ignore pt.addPullValue("tracked_24h", "", func() = sumBuckets(DAY_HOURS));
-      ignore pt.addPullValue("tracked_7d", "", func() = sumBuckets(WEEK_HOURS));
-      ignore pt.addPullValue("tracked_30d", "", func() = sumBuckets(MONTH_HOURS));
+    public func registerMetrics(renderer : PT.Renderer) {
+      renderer.addValue(
+        [
+          PT.newValue("tracked_24h", [], func() = sumBuckets(DAY_HOURS)),
+          PT.newValue("tracked_7d", [], func() = sumBuckets(WEEK_HOURS)),
+          PT.newValue("tracked_30d", [], func() = sumBuckets(MONTH_HOURS)),
+        ].bundle([])
+      );
     };
 
     public func share() : StableDataV1 = {

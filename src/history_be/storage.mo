@@ -12,6 +12,7 @@ import Region "mo:core/Region";
 import LogLists "mo:stable-log-lists";
 import Enumeration "mo:stable-trie/Enumeration";
 import PT "mo:promtracker";
+import { Tracker; Heatmap } "mo:promtracker";
 
 import StableOrderedSet "models/stable_ordered_set";
 import History "history";
@@ -56,7 +57,7 @@ module {
     private let hashesSet : StableOrderedSet.StableOrderedSet<Blob> = StableOrderedSet.StableOrderedSet<Blob>(32, func x = x, func x = ?x);
     private var metadataMap : Map.Map<Nat, Metadata.Metadata> = data.metadataMap;
 
-    private var changesAmountDistribution : ?PT.HeatmapValue = null;
+    private var changesAmountDistribution : ?Heatmap.Heatmap = null;
 
     switch (data.storageMap) {
       case (?d) storageMap.unshare(d);
@@ -100,7 +101,7 @@ module {
       };
       List.add(historyStorage, history);
       switch (changesAmountDistribution) {
-        case (?cad) cad.addEntry(0);
+        case (?cad) cad.add(0);
         case (null) {};
       };
       id;
@@ -191,7 +192,7 @@ module {
         cur_change_index += 1;
       };
       switch (changesAmountDistribution) {
-        case (?cad) cad.updateEntry(oldChangesAmount, LogLists.size(changes, canisterIdx));
+        case (?cad) cad.update(oldChangesAmount, LogLists.size(changes, canisterIdx));
         case (null) {};
       };
       ret;
@@ -219,35 +220,51 @@ module {
       metadata.latest_update_timestamp := Prim.time();
     };
 
-    public func registerMetrics(pt : PT.PromTracker) {
+    public func registerMetrics(pt : Tracker.Tracker, renderer : PT.Renderer) {
       func getEnumerationPagesAllocated(data : Enumeration.StableData) : Nat {
         Nat64.toNat(Region.size(data.nodes.region) + Region.size(data.leaves.region));
       };
 
-      ignore pt.addPullValue("stable_records_total", "structure=\"changes_lists\"", func() = LogLists.totalSize(changes));
-      ignore pt.addPullValue("stable_pages_allocated", "structure=\"changes_lists\"", func() = Nat64.toNat(Region.size(changes.data) + Region.size(changes.indexTable)));
+      renderer.addValue(
+        [
+          PT.newValue("stable_records_total", [], func() = LogLists.totalSize(changes)),
+          PT.newValue("stable_pages_allocated", [], func() = Nat64.toNat(Region.size(changes.data) + Region.size(changes.indexTable))),
+        ].bundle([("structure", "changes_lists")])
+      );
 
-      ignore pt.addPullValue("stable_records_total", "structure=\"storage_map\"", func() = storageMap.size());
-      ignore pt.addPullValue("stable_pages_allocated", "structure=\"storage_map\"", func() = getEnumerationPagesAllocated(storageMap.share()));
-      ignore pt.addPullValue("stable_map_byte_size", "structure=\"storage_map\"", func() = storageMap.memoryStats().byte_size);
-      ignore pt.addPullValue("stable_map_leaf_count", "structure=\"storage_map\"", func() = storageMap.memoryStats().leaf_count);
-      ignore pt.addPullValue("stable_map_node_count", "structure=\"storage_map\"", func() = storageMap.memoryStats().node_count);
+      renderer.addValue(
+        [
+          PT.newValue("stable_records_total", [], func() = storageMap.size()),
+          PT.newValue("stable_pages_allocated", [], func() = getEnumerationPagesAllocated(storageMap.share())),
+          PT.newValue("stable_map_byte_size", [], func() = storageMap.memoryStats().byte_size),
+          PT.newValue("stable_map_leaf_count", [], func() = storageMap.memoryStats().leaf_count),
+          PT.newValue("stable_map_node_count", [], func() = storageMap.memoryStats().node_count),
+        ].bundle([("structure", "storage_map")])
+      );
 
-      ignore pt.addPullValue("stable_records_total", "structure=\"principals_set\"", func() = principalsSet.size());
-      ignore pt.addPullValue("stable_pages_allocated", "structure=\"principals_set\"", func() = getEnumerationPagesAllocated(principalsSet.share()));
-      ignore pt.addPullValue("stable_map_byte_size", "structure=\"principals_set\"", func() = principalsSet.memoryStats().byte_size);
-      ignore pt.addPullValue("stable_map_leaf_count", "structure=\"principals_set\"", func() = principalsSet.memoryStats().leaf_count);
-      ignore pt.addPullValue("stable_map_node_count", "structure=\"principals_set\"", func() = principalsSet.memoryStats().node_count);
+      renderer.addValue(
+        [
+          PT.newValue("stable_records_total", [], func() = principalsSet.size()),
+          PT.newValue("stable_pages_allocated", [], func() = getEnumerationPagesAllocated(principalsSet.share())),
+          PT.newValue("stable_map_byte_size", [], func() = principalsSet.memoryStats().byte_size),
+          PT.newValue("stable_map_leaf_count", [], func() = principalsSet.memoryStats().leaf_count),
+          PT.newValue("stable_map_node_count", [], func() = principalsSet.memoryStats().node_count),
+        ].bundle([("structure", "principals_set")])
+      );
 
-      ignore pt.addPullValue("stable_records_total", "structure=\"hashes_set\"", func() = hashesSet.size());
-      ignore pt.addPullValue("stable_pages_allocated", "structure=\"hashes_set\"", func() = getEnumerationPagesAllocated(hashesSet.share()));
-      ignore pt.addPullValue("stable_map_byte_size", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().byte_size);
-      ignore pt.addPullValue("stable_map_leaf_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().leaf_count);
-      ignore pt.addPullValue("stable_map_node_count", "structure=\"hashes_set\"", func() = hashesSet.memoryStats().node_count);
+      renderer.addValue(
+        [
+          PT.newValue("stable_records_total", [], func() = hashesSet.size()),
+          PT.newValue("stable_pages_allocated", [], func() = getEnumerationPagesAllocated(hashesSet.share())),
+          PT.newValue("stable_map_byte_size", [], func() = hashesSet.memoryStats().byte_size),
+          PT.newValue("stable_map_leaf_count", [], func() = hashesSet.memoryStats().leaf_count),
+          PT.newValue("stable_map_node_count", [], func() = hashesSet.memoryStats().node_count),
+        ].bundle([("structure", "hashes_set")])
+      );
 
-      let cad = pt.addHeatmap("changes_amount_distribution", "", false);
+      let cad = pt.newHeatmap("changes_amount_distribution", []);
       for (i in List.keys(historyStorage)) {
-        cad.addEntry(LogLists.size(changes, i));
+        cad.add(LogLists.size(changes, i));
       };
       changesAmountDistribution := ?cad;
     };
