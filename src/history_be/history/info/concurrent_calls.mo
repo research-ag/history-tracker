@@ -26,9 +26,7 @@ module {
       };
     };
     // now process the responses
-    var i = 0;
-    while (i < List.size(futures)) {
-      let fut = List.at(futures, i);
+    for ((i, fut) in futures.enumerate()) {
       var trapDetected = true;
       try {
         fut.1 (await? fut.0);
@@ -37,7 +35,6 @@ module {
         fut.2 (e);
         trapDetected := false;
       } finally if (trapDetected) trap_cb(i);
-      i += 1;
     };
   };
 

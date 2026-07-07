@@ -113,7 +113,7 @@ persistent actor class HistoryTracker() = self {
   let pt_syncAttempts = pt.newCounter("sync_attempts_total", []);
   let pt_metadataUpdates = pt.newCounter("metadata_update_total", []);
   let pt_unauthorizedMetadataUpdates = pt.newCounter("unauthorized_metadata_update_total", []);
-  let pt_trigger_interval = pt.newCounter("trigger_interval", []);
+  let pt_trigger_interval = pt.newGauge("trigger_interval", [], []);
   // heatmaps
   let changesAmountDistribution = pt.newHeatmap("changes_amount_distribution", []);
 
@@ -347,7 +347,7 @@ persistent actor class HistoryTracker() = self {
     #seconds 60,
     func() : async () { await* trigger_sync() },
   );
-  pt_trigger_interval.set(60);
+  pt_trigger_interval.update(60);
 
   // ADMIN API
   public func startTriggerTimer(intervalSeconds : Nat) : async () {
@@ -362,7 +362,7 @@ persistent actor class HistoryTracker() = self {
       #seconds intervalSeconds,
       func() : async () { await* trigger_sync() },
     );
-    pt_trigger_interval.set(intervalSeconds);
+    pt_trigger_interval.update(intervalSeconds);
   };
 
   public func stopTriggerTimer() : async () {
@@ -373,7 +373,7 @@ persistent actor class HistoryTracker() = self {
       };
       case (_) {};
     };
-    pt_trigger_interval.set(0);
+    pt_trigger_interval.update(0);
   };
 
   public func setNumToSync(n : Nat) : async () {

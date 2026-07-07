@@ -199,10 +199,10 @@ module {
     ret;
   };
 
-  public func readMetadata(self : Storage, canisterIdx : Nat) : ?Metadata.Metadata = Map.get(self.metadataMap, Nat.compare, canisterIdx);
+  public func readMetadata(self : Storage, canisterIdx : Nat) : ?Metadata.Metadata = self.metadataMap.get(canisterIdx);
 
   public func updateMetadata(self : Storage, canisterIdx : Nat, name : ?Text, description : ?Text) : () {
-    let metadata = switch (Map.get(self.metadataMap, Nat.compare, canisterIdx)) {
+    let metadata = switch (self.metadataMap.get(canisterIdx)) {
       case (?md) md;
       case (null) {
         let md = Metadata.new();

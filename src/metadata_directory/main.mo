@@ -3,13 +3,27 @@ import Blob "mo:core/Blob";
 import Error "mo:core/Error";
 import Option "mo:core/Option";
 import Array "mo:core/Array";
-import Map "mo:core/pure/Map";
+import Map "mo:core/Map";
+import PureMap "mo:core/pure/Map";
 import Iter "mo:core/Iter";
 import Nat "mo:core/Nat";
 import Result "mo:core/Result";
 import Vector "mo:vector/Class";
 import Prim "mo:prim";
 
+(
+  with migration = func(
+    old : {
+      var storage : PureMap.Map<Principal, { var wasm_metadata_storage : Map.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }>;
+    }
+  ) : {
+    storage : Map.Map<Principal, { var wasm_metadata_storage : Map.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }>;
+  } {
+    {
+      storage = Map.fromPure(old.storage);
+    };
+  }
+)
 persistent actor class () = self {
 
   public type WasmMetadata = {
@@ -40,7 +54,7 @@ persistent actor class () = self {
     var wasm_metadata_storage : Map.Map<Blob, WasmMetadata>;
   };
 
-  var storage : Map.Map<Principal, PrincipalRecord> = Map.empty<Principal, PrincipalRecord>();
+  let storage : Map.Map<Principal, PrincipalRecord> = Map.empty<Principal, PrincipalRecord>();
 
   //
   // API for Metadata directory management
@@ -79,20 +93,18 @@ persistent actor class () = self {
 
   public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async Result.Result<(), Errors.AddWasmMetadata> {
     await* validate_change_payload(payload);
-    let pr = switch (Map.get(storage, Principal.compare, caller)) {
+    let pr = switch (storage.get(caller)) {
       case (?value) value;
       case (null) {
         let pr_new : PrincipalRecord = {
           var wasm_metadata_storage = Map.empty<Blob, WasmMetadata>();
         };
-        storage := Map.add(storage, Principal.compare, caller, pr_new);
+        storage.add(caller, pr_new);
         pr_new;
       };
     };
-    if (Map.containsKey(pr.wasm_metadata_storage, Blob.compare, payload.module_hash)) return #err(#ModuleHashAlreadyExists({ message = "The provided module hash already exists." }));
-    pr.wasm_metadata_storage := Map.add(
-      pr.wasm_metadata_storage,
-      Blob.compare,
+    if (pr.wasm_metadata_storage.containsKey(payload.module_hash)) return #err(#ModuleHashAlreadyExists({ message = "The provided module hash already exists." }));
+    pr.wasm_metadata_storage.add(
       payload.module_hash,
       {
         module_hash = payload.module_hash;
@@ -107,11 +119,9 @@ persistent actor class () = self {
 
   public shared ({ caller }) func update_wasm_metadata(payload : WasmMetadataChangePayload) : async Result.Result<(), Errors.UpdateWasmMetadata> {
     await* validate_change_payload(payload);
-    let ?pr = Map.get(storage, Principal.compare, caller) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
-    let ?wasm_metadata = Map.get(pr.wasm_metadata_storage, Blob.compare, payload.module_hash) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
-    pr.wasm_metadata_storage := Map.add(
-      pr.wasm_metadata_storage,
-      Blob.compare,
+    let ?pr = storage.get(caller) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
+    let ?wasm_metadata = pr.wasm_metadata_storage.get(payload.module_hash) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
+    pr.wasm_metadata_storage.add(
       payload.module_hash,
       {
         module_hash = payload.module_hash;
