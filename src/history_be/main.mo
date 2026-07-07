@@ -17,10 +17,8 @@ import Map "mo:core/pure/Map";
 import List "mo:core/List";
 import Queue "mo:core/Queue";
 import PT "mo:promtracker";
-import { Tracker; Counter; Gauge; Heatmap } "mo:promtracker";
+import { Tracker; Counter; Gauge } "mo:promtracker";
 import Http "mo:promtracker/mixins/http";
-
-import LogLists "mo:stable-log-lists";
 
 import Task "models/task";
 
@@ -50,9 +48,6 @@ persistent actor class HistoryTracker() = self {
 
   /// Number of canisters that are synchronized per iteration.
   transient var canisters_num_to_sync = 100;
-
-  /// A storage of history data
-  var storageDataV2 : Storage.StableDataV1 = Storage.defaultStableDataV1();
 
   /// Main task which loops over all of the canisters
   var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
@@ -122,15 +117,7 @@ persistent actor class HistoryTracker() = self {
   // heatmaps
   let changesAmountDistribution = pt.newHeatmap("changes_amount_distribution", []);
 
-  transient let storage : Storage.Storage = Storage.Storage(storageDataV2, changesAmountDistribution);
-
-  // refresh heatmap completely on canister upgrade (optional)
-  changesAmountDistribution.count := 0;
-  changesAmountDistribution.sum := 0;
-  changesAmountDistribution.buckets := [var];
-  for (i in List.keys(storageDataV2.historyStorage)) {
-    changesAmountDistribution.add(LogLists.size(storageDataV2.changes, i));
-  };
+  let storage : Storage.Storage = Storage.empty(changesAmountDistribution);
 
   allCanistersTaskDataSource.setSize(storage.size());
   transient let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
@@ -507,7 +494,6 @@ persistent actor class HistoryTracker() = self {
   };
 
   system func preupgrade() {
-    storageDataV2 := storage.share();
     allCanistersTaskData := (allCanistersTaskDataSource.share(), allCanistersTask);
     tasksData := Map.map<Text, Task.BufferTask, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>(
       tasks,
