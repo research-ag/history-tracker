@@ -14,13 +14,20 @@ import Prim "mo:prim";
 (
   with migration = func(
     old : {
-      var storage : PureMap.Map<Principal, { var wasm_metadata_storage : Map.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }>;
+      var storage : PureMap.Map<Principal, { var wasm_metadata_storage : PureMap.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }>;
     }
   ) : {
     storage : Map.Map<Principal, { var wasm_metadata_storage : Map.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }>;
   } {
     {
-      storage = Map.fromPure(old.storage);
+      storage = Map.fromPure(
+        PureMap.map<Principal, { var wasm_metadata_storage : PureMap.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }, { var wasm_metadata_storage : Map.Map<Blob, { module_hash : Blob; description : Text; build_instructions : Text; latest_update_timestamp : Nat64; created_timestamp : Nat64 }> }>(
+          old.storage,
+          func(p, item) = {
+            var wasm_metadata_storage = Map.fromPure(item.wasm_metadata_storage);
+          },
+        )
+      );
     };
   }
 )

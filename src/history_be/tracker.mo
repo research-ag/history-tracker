@@ -54,9 +54,9 @@ module {
     public func registerMetrics(renderer : PT.Renderer) {
       renderer.addValue(
         [
-          PT.newValue("tracked_24h", [], func() = sumBuckets(DAY_HOURS)),
-          PT.newValue("tracked_7d", [], func() = sumBuckets(WEEK_HOURS)),
-          PT.newValue("tracked_30d", [], func() = sumBuckets(MONTH_HOURS)),
+          PT.newValue("tracked_24h", [], func() = getTrackingStats().new_24h),
+          PT.newValue("tracked_7d", [], func() = getTrackingStats().new_7d),
+          PT.newValue("tracked_30d", [], func() = getTrackingStats().new_30d),
         ].bundle([])
       );
     };
