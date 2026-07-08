@@ -199,6 +199,42 @@ module {
     ret;
   };
 
+  /// Imports already-processed change records (e.g. fetched from another
+  /// history tracker) into this canister's storage.
+  ///
+  /// Unlike `appendChanges`, this does NOT treat the input as a raw IC sync
+  /// response: it does not filter rename events, does not recompute
+  /// `change_index` from `total_num_changes` and does not enforce the
+  /// `recent_changes <= total_num_changes` invariant. The supplied
+  /// `ExtendedChange` records already carry their own `change_index`, so they
+  /// are stored verbatim.
+  public func importChanges(
+    self : Storage,
+    canisterIdx : Nat,
+    changes : [ExtendedChange.ExtendedChange],
+  ) {
+    let oldChangesAmount = LogLists.size(self.changes, canisterIdx);
+    assert oldChangesAmount == 0;
+    for (change in changes.vals()) {
+      LogLists.append(
+        self.changes,
+        canisterIdx,
+        ExtendedChange.serializeExtendedChange(
+          change,
+          func(p : Principal) : Nat {
+            let (_, idx) = self.principalsSet.lookupOrAdd(PB.toBlob(p), "");
+            idx;
+          },
+          func(hash : Blob) : Nat {
+            let (_, idx) = self.hashesSet.lookupOrAdd(hash, "");
+            idx;
+          },
+        ),
+      );
+    };
+    self.changesAmountDistribution.update(oldChangesAmount, LogLists.size(self.changes, canisterIdx));
+  };
+
   public func readMetadata(self : Storage, canisterIdx : Nat) : ?Metadata.Metadata = self.metadataMap.get(canisterIdx);
 
   public func updateMetadata(self : Storage, canisterIdx : Nat, name : ?Text, description : ?Text) : () {

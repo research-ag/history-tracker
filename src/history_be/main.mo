@@ -4,6 +4,7 @@ import Error "mo:core/Error";
 import Int "mo:core/Int";
 import Nat "mo:core/Nat";
 import Nat64 "mo:core/Nat64";
+import Option "mo:core/Option";
 import Prim "mo:prim";
 import Principal "mo:core/Principal";
 import Result "mo:core/Result";
@@ -343,11 +344,12 @@ persistent actor class HistoryTracker() = self {
     };
   };
 
-  transient var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
-    #seconds 60,
-    func() : async () { await* trigger_sync() },
-  );
-  pt_trigger_interval.update(60);
+  // transient var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
+  //   #seconds 60,
+  //   func() : async () { await* trigger_sync() },
+  // );
+  // pt_trigger_interval.update(60);
+  transient var triggerTimer : ?Nat = null;
 
   // ADMIN API
   public func startTriggerTimer(intervalSeconds : Nat) : async () {
@@ -506,5 +508,92 @@ persistent actor class HistoryTracker() = self {
       Task.deregisterMetrics(task, renderer);
     };
   };
+
+  public query func trackedCanisterFullInfo(limit : Nat, skip : Nat) : async [(Principal, CanisterChangesResponse, ?Metadata.SharedMetadata)] {
+    let min = Nat.min(skip, storage.size());
+    let max = Nat.min(skip + limit, storage.size());
+    if (min == max) return [];
+    Array.tabulate<(Principal, CanisterChangesResponse, ?Metadata.SharedMetadata)>(
+      max - min,
+      func(i) {
+        let idx = min + i;
+        let ?p = storage.canisterId(idx) else Prim.trap("Can never happen!");
+        let history = storage.get(idx);
+        (
+          p,
+          {
+            changes = storage.readChanges(idx);
+            total_num_changes = history.total_num_changes;
+            timestamp_nanos = history.timestamp_nanos;
+            sync_version = history.sync_version;
+          },
+          Option.map(storage.readMetadata(idx), Metadata.shareMetadata),
+        );
+      },
+    );
+  };
+
+  var otherHistoryTrackerSkip : Nat = 0;
+  transient var otherHistoryTrackerLimit = 1500;
+
+  public func fetchFromHistoryTracker() : async () {
+    ignore await* fetchFromHistoryTrackerInternal();
+  };
+
+  public func startFetchFromHistoryTrackerTimer() : async () {
+    ignore await* fetchFromHistoryTrackerInternal();
+  };
+
+  private func fetchFromHistoryTrackerInternal() : async* Nat {
+    let historyTracker : actor {
+      trackedCanisterFullInfo : (limit : Nat, skip : Nat) -> async [(Principal, CanisterChangesResponse, ?Metadata.SharedMetadata)];
+    } = actor ("jcmga-jqaaa-aaaao-a4lha-cai");
+    let bulk = await historyTracker.trackedCanisterFullInfo(otherHistoryTrackerLimit, otherHistoryTrackerSkip);
+    for ((i, (p, changes, metadata)) in bulk.enumerate()) {
+      // Recreate the history record from the fetched change counters.
+      let history = History.new();
+      history.total_num_changes := changes.total_num_changes;
+      history.timestamp_nanos := changes.timestamp_nanos;
+      history.sync_version := changes.sync_version;
+
+      let id = insertCanister(p, history);
+      assert id == i + otherHistoryTrackerSkip;
+
+      // Persist the already-processed change records into this canister's
+      // storage verbatim (they already carry their own `change_index`, so we
+      // must not run them through the IC-sync `appendChanges` logic).
+      storage.importChanges(id, changes.changes);
+
+      // Track the latest change timestamp so subsequent syncs don't re-append.
+      var latest : Nat64 = 0;
+      for (change in changes.changes.vals()) {
+        if (change.timestamp_nanos > latest) latest := change.timestamp_nanos;
+      };
+      history.latest_change_timestamp := latest;
+
+      // Persist the metadata (name/description) if it was present.
+      switch (metadata) {
+        case (?md) storage.updateMetadata(id, ?md.name, ?md.description);
+        case (null) {};
+      };
+    };
+    otherHistoryTrackerSkip += bulk.size();
+    bulk.size();
+  };
+
+  private func fetchFromHistoryTracker_() : async () {
+    try {
+      let bulkSize = await* fetchFromHistoryTrackerInternal();
+      if (bulkSize == 0) {
+        return;
+      };
+      otherHistoryTrackerLimit += Nat.max(100, otherHistoryTrackerLimit / 15);
+    } catch (e) {
+      otherHistoryTrackerLimit := Nat.max(1, otherHistoryTrackerLimit / 2);
+    };
+    ignore Timer.setTimer<system>(#seconds 1, fetchFromHistoryTracker_);
+  };
+
+  ignore Timer.setTimer<system>(#seconds 1, fetchFromHistoryTracker_);
 
 };
