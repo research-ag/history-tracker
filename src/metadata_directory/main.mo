@@ -1,15 +1,15 @@
-import Principal "mo:core/Principal";
+import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import Error "mo:core/Error";
-import Option "mo:core/Option";
-import Array "mo:core/Array";
-import Map "mo:core/Map";
-import PureMap "mo:core/pure/Map";
 import Iter "mo:core/Iter";
+import List "mo:core/List";
+import Map "mo:core/Map";
 import Nat "mo:core/Nat";
-import Result "mo:core/Result";
-import Vector "mo:vector/Class";
+import Option "mo:core/Option";
 import Prim "mo:prim";
+import Principal "mo:core/Principal";
+import PureMap "mo:core/pure/Map";
+import Result "mo:core/Result";
 
 (
   with migration = func(
@@ -146,7 +146,7 @@ persistent actor class () = self {
   //
 
   public query func find_wasm_metadata(module_hash : Blob, principals : [Principal]) : async [(Principal, WasmMetadata)] {
-    let result = Vector.Vector<(Principal, WasmMetadata)>();
+    let result = List.empty<(Principal, WasmMetadata)>();
 
     label loop_1 for (p in principals.vals()) {
       let ?pr = Map.get(storage, Principal.compare, p) else continue loop_1;
@@ -154,7 +154,7 @@ persistent actor class () = self {
       result.add((p, wasm_metadata));
     };
 
-    Vector.toArray(result);
+    result.toArray();
   };
 
   func calculate_wasm_metadata_size(wasm_metadata : WasmMetadata) : Nat {
@@ -167,7 +167,7 @@ persistent actor class () = self {
   };
 
   public query func available_metadata(principals : [Principal], module_hashes : [Blob]) : async [(Principal, Blob, Nat)] {
-    let result = Vector.Vector<(Principal, Blob, Nat)>();
+    let result = List.empty<(Principal, Blob, Nat)>();
 
     label loop_1 for (p in principals.vals()) {
       let ?pr = Map.get(storage, Principal.compare, p) else continue loop_1;
@@ -192,6 +192,6 @@ persistent actor class () = self {
       };
     };
 
-    Vector.toArray(result);
+    result.toArray();
   };
 };
