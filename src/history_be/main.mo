@@ -343,12 +343,11 @@ persistent actor class HistoryTracker() = self {
     };
   };
 
-  // transient var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
-  //   #seconds 60,
-  //   func() : async () { await* trigger_sync() },
-  // );
-  // pt_trigger_interval.update(60);
-  transient var triggerTimer : ?Nat = null;
+  transient var triggerTimer : ?Nat = ?Timer.recurringTimer<system>(
+    #seconds 60,
+    func() : async () { await* trigger_sync() },
+  );
+  pt_trigger_interval.update(60);
 
   // ADMIN API
   public func startTriggerTimer(intervalSeconds : Nat) : async () {
