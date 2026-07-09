@@ -533,7 +533,6 @@ persistent actor class HistoryTracker() = self {
     );
   };
 
-  var otherHistoryTrackerSkip : Nat = 0;
   transient var otherHistoryTrackerLimit = 1500;
 
   public func fetchFromHistoryTracker() : async () {
@@ -547,8 +546,8 @@ persistent actor class HistoryTracker() = self {
   private func fetchFromHistoryTrackerInternal() : async* Nat {
     let historyTracker : actor {
       trackedCanisterFullInfo : (limit : Nat, skip : Nat) -> async [(Principal, CanisterChangesResponse, ?Metadata.SharedMetadata)];
-    } = actor ("jcmga-jqaaa-aaaao-a4lha-cai");
-    let bulk = await historyTracker.trackedCanisterFullInfo(otherHistoryTrackerLimit, otherHistoryTrackerSkip);
+    } = actor ("i2ftd-hqaaa-aaaao-a4lda-cai");
+    let bulk = await historyTracker.trackedCanisterFullInfo(otherHistoryTrackerLimit, storage.size());
     for ((i, (p, changes, metadata)) in bulk.enumerate()) {
       // Recreate the history record from the fetched change counters.
       let history = History.new();
@@ -557,7 +556,6 @@ persistent actor class HistoryTracker() = self {
       history.sync_version := changes.sync_version;
 
       let id = insertCanister(p, history);
-      assert id == i + otherHistoryTrackerSkip;
 
       // Persist the already-processed change records into this canister's
       // storage verbatim (they already carry their own `change_index`, so we
@@ -577,7 +575,6 @@ persistent actor class HistoryTracker() = self {
         case (null) {};
       };
     };
-    otherHistoryTrackerSkip += bulk.size();
     bulk.size();
   };
 
