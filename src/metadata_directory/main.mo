@@ -1,14 +1,14 @@
-import Principal "mo:base/Principal";
-import Blob "mo:base/Blob";
-import Error "mo:base/Error";
-import Option "mo:base/Option";
-import Array "mo:base/Array";
-import OrderedMap "mo:base/OrderedMap";
-import Iter "mo:base/Iter";
-import Nat "mo:base/Nat";
-import Result "mo:base/Result";
-import Vector "mo:vector/Class";
+import Array "mo:core/Array";
+import Blob "mo:core/Blob";
+import Error "mo:core/Error";
+import Iter "mo:core/Iter";
+import List "mo:core/List";
+import Map "mo:core/Map";
+import Nat "mo:core/Nat";
+import Option "mo:core/Option";
 import Prim "mo:prim";
+import Principal "mo:core/Principal";
+import Result "mo:core/Result";
 
 persistent actor class () = self {
 
@@ -37,13 +37,10 @@ persistent actor class () = self {
   };
 
   public type PrincipalRecord = {
-    var wasm_metadata_storage : OrderedMap.Map<Blob, WasmMetadata>;
+    var wasm_metadata_storage : Map.Map<Blob, WasmMetadata>;
   };
 
-  transient let principalMap = OrderedMap.Make<Principal>(Principal.compare);
-  transient let blobMap = OrderedMap.Make<Blob>(Blob.compare);
-
-  var storage : OrderedMap.Map<Principal, PrincipalRecord> = principalMap.empty<PrincipalRecord>();
+  let storage : Map.Map<Principal, PrincipalRecord> = Map.empty<Principal, PrincipalRecord>();
 
   //
   // API for Metadata directory management
@@ -54,9 +51,9 @@ persistent actor class () = self {
       case (?value) value;
       case (null) caller;
     };
-    let ?pr = principalMap.get(storage, p_to_request) else return [];
+    let ?pr = Map.get(storage, Principal.compare, p_to_request) else return [];
     pr.wasm_metadata_storage
-    |> blobMap.vals(_)
+    |> Map.values(_)
     |> Iter.toArray(_);
   };
 
@@ -82,19 +79,18 @@ persistent actor class () = self {
 
   public shared ({ caller }) func add_wasm_metadata(payload : WasmMetadataChangePayload) : async Result.Result<(), Errors.AddWasmMetadata> {
     await* validate_change_payload(payload);
-    let pr = switch (principalMap.get(storage, caller)) {
+    let pr = switch (storage.get(caller)) {
       case (?value) value;
       case (null) {
         let pr_new : PrincipalRecord = {
-          var wasm_metadata_storage = blobMap.empty<WasmMetadata>();
+          var wasm_metadata_storage = Map.empty<Blob, WasmMetadata>();
         };
-        storage := principalMap.put(storage, caller, pr_new);
+        storage.add(caller, pr_new);
         pr_new;
       };
     };
-    if (blobMap.contains(pr.wasm_metadata_storage, payload.module_hash)) return #err(#ModuleHashAlreadyExists({ message = "The provided module hash already exists." }));
-    pr.wasm_metadata_storage := blobMap.put(
-      pr.wasm_metadata_storage,
+    if (pr.wasm_metadata_storage.containsKey(payload.module_hash)) return #err(#ModuleHashAlreadyExists({ message = "The provided module hash already exists." }));
+    pr.wasm_metadata_storage.add(
       payload.module_hash,
       {
         module_hash = payload.module_hash;
@@ -109,10 +105,9 @@ persistent actor class () = self {
 
   public shared ({ caller }) func update_wasm_metadata(payload : WasmMetadataChangePayload) : async Result.Result<(), Errors.UpdateWasmMetadata> {
     await* validate_change_payload(payload);
-    let ?pr = principalMap.get(storage, caller) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
-    let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, payload.module_hash) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
-    pr.wasm_metadata_storage := blobMap.put(
-      pr.wasm_metadata_storage,
+    let ?pr = storage.get(caller) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
+    let ?wasm_metadata = pr.wasm_metadata_storage.get(payload.module_hash) else return #err(#NoWasmMetadata({ message = "There is no metadata for the wasm module." }));
+    pr.wasm_metadata_storage.add(
       payload.module_hash,
       {
         module_hash = payload.module_hash;
@@ -130,15 +125,15 @@ persistent actor class () = self {
   //
 
   public query func find_wasm_metadata(module_hash : Blob, principals : [Principal]) : async [(Principal, WasmMetadata)] {
-    let result = Vector.Vector<(Principal, WasmMetadata)>();
+    let result = List.empty<(Principal, WasmMetadata)>();
 
     label loop_1 for (p in principals.vals()) {
-      let ?pr = principalMap.get(storage, p) else continue loop_1;
-      let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, module_hash) else continue loop_1;
+      let ?pr = Map.get(storage, Principal.compare, p) else continue loop_1;
+      let ?wasm_metadata = Map.get(pr.wasm_metadata_storage, Blob.compare, module_hash) else continue loop_1;
       result.add((p, wasm_metadata));
     };
 
-    Vector.toArray(result);
+    result.toArray();
   };
 
   func calculate_wasm_metadata_size(wasm_metadata : WasmMetadata) : Nat {
@@ -151,14 +146,14 @@ persistent actor class () = self {
   };
 
   public query func available_metadata(principals : [Principal], module_hashes : [Blob]) : async [(Principal, Blob, Nat)] {
-    let result = Vector.Vector<(Principal, Blob, Nat)>();
+    let result = List.empty<(Principal, Blob, Nat)>();
 
     label loop_1 for (p in principals.vals()) {
-      let ?pr = principalMap.get(storage, p) else continue loop_1;
+      let ?pr = Map.get(storage, Principal.compare, p) else continue loop_1;
 
       // interpret [] as a wildcard
       if (Array.size(module_hashes) == 0) {
-        let iter = blobMap.vals(pr.wasm_metadata_storage);
+        let iter = Map.values(pr.wasm_metadata_storage);
         for (wasm_metadata in iter) {
           wasm_metadata
           |> (p, _.module_hash, calculate_wasm_metadata_size(_))
@@ -169,13 +164,13 @@ persistent actor class () = self {
 
       // general case
       label loop_2 for (module_hash in module_hashes.vals()) {
-        let ?wasm_metadata = blobMap.get(pr.wasm_metadata_storage, module_hash) else continue loop_2;
+        let ?wasm_metadata = Map.get(pr.wasm_metadata_storage, Blob.compare, module_hash) else continue loop_2;
         wasm_metadata
         |> (p, _.module_hash, calculate_wasm_metadata_size(_))
         |> result.add(_);
       };
     };
 
-    Vector.toArray(result);
+    result.toArray();
   };
 };

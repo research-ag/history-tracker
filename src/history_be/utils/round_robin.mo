@@ -208,11 +208,11 @@ module {
   public func roundRobinCollect<T>(sources : [Iter.Iter<T>], deduplicationEqual : ?((T, T) -> Bool)) : Iter.Iter<(Nat, T)> {
     if (sources.size() == 0) return Iter.empty();
 
-    var sourcesToUse : Queue.Queue<(Nat, Iter.Iter<T>)> = sources.keys()
+    let sourcesToUse : Queue.Queue<(Nat, Iter.Iter<T>)> = sources.keys()
     |> Iter.map<Nat, (Nat, Iter.Iter<T>)>(_, func(i) = (i, sources[i]))
     |> Queue.fromIter(_);
 
-    var producedItems : List.List<T> = List.empty();
+    let producedItems : List.List<T> = List.empty();
 
     return {
       next = func() : ?(Nat, T) {

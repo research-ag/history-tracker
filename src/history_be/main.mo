@@ -1,16 +1,15 @@
-import Array "mo:base/Array";
-import Buffer "mo:base/Buffer";
-// import Debug "mo:base/Debug";
-import Error "mo:base/Error";
-import Int "mo:base/Int";
-import Nat "mo:base/Nat";
-import Nat64 "mo:base/Nat64";
+import Array "mo:core/Array";
+import VarArray "mo:core/VarArray";
+import Error "mo:core/Error";
+import Int "mo:core/Int";
+import Nat "mo:core/Nat";
+import Nat64 "mo:core/Nat64";
 import Prim "mo:prim";
-import Principal "mo:base/Principal";
-import Result "mo:base/Result";
-import Text "mo:base/Text";
-import Time "mo:base/Time";
-import Timer "mo:base/Timer";
+import Principal "mo:core/Principal";
+import Result "mo:core/Result";
+import Text "mo:core/Text";
+import Time "mo:core/Time";
+import Timer "mo:core/Timer";
 import ExtendedChange "history/extended_change";
 
 import Iter "mo:core/Iter";
@@ -18,10 +17,11 @@ import Map "mo:core/pure/Map";
 import List "mo:core/List";
 import Queue "mo:core/Queue";
 import PT "mo:promtracker";
+import { Tracker; Counter; Gauge } "mo:promtracker";
+import Http "mo:promtracker/mixins/http";
 
 import Task "models/task";
 
-import Http "utils/tiny_http";
 import RoundRobin "utils/round_robin";
 
 import History "history";
@@ -29,7 +29,7 @@ import Metadata "history/metadata";
 import Concurrent "history/info/concurrent_calls";
 
 import Storage "./storage";
-import Tracker "./tracker";
+import HTracker "./tracker";
 
 persistent actor class HistoryTracker() = self {
 
@@ -49,10 +49,6 @@ persistent actor class HistoryTracker() = self {
   /// Number of canisters that are synchronized per iteration.
   transient var canisters_num_to_sync = 100;
 
-  /// A storage of history data
-  var storageDataV2 : Storage.StableDataV1 = Storage.defaultStableDataV1();
-  transient let storage : Storage.Storage = Storage.Storage(storageDataV2);
-
   /// Main task which loops over all of the canisters
   var allCanistersTaskData : (RoundRobin.RoundRobinGeneratorData, Task.TaskState) = (
     { size = 0; ctr = 0; round = 0 },
@@ -65,8 +61,6 @@ persistent actor class HistoryTracker() = self {
     },
   );
   transient let allCanistersTaskDataSource : RoundRobin.RoundRobinNatGenerator = RoundRobin.RoundRobinNatGenerator(?allCanistersTaskData.0);
-  allCanistersTaskDataSource.setSize(storage.size());
-  transient let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
 
   /// Custom tasks
   var tasksData = Map.empty<Text, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>();
@@ -75,8 +69,8 @@ persistent actor class HistoryTracker() = self {
     func((_, td)) = Task.newBufferTask(td.1, RoundRobin.RoundRobinBuffer<Nat>(?td.0)),
   );
 
-  var trackerData : Tracker.StableDataV1 = Tracker.defaultStableDataV1();
-  transient let tracker : Tracker.Tracker = Tracker.Tracker(trackerData);
+  var trackerData : HTracker.StableDataV1 = HTracker.defaultStableDataV1();
+  transient let tracker : HTracker.Tracker = HTracker.Tracker(trackerData);
 
   func insertCanister(canisterId : Principal, history : History.History) : Nat {
     let id = storage.insertCanister(canisterId, history);
@@ -98,46 +92,59 @@ persistent actor class HistoryTracker() = self {
   transient let backlog = Queue.empty<Nat>();
 
   // PromTracker
-  transient let pt = PT.PromTracker("", 65);
-  pt.addSystemValues();
+  let pt = Tracker.new();
+  transient let renderer = PT.Renderer();
+  renderer.addValue(pt.toValue());
+  include Http(renderer.renderExposition, "/metrics");
+  renderer.addCanisterLabel(self);
+  renderer.addValue(PT.allSystemMetrics);
+
   // gauges
   func logarithmic(n : Nat, base : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n + 1, func(i) = if (i == 0) 0 else unit * base ** (i - 1));
   func linear(n : Nat, unit : Nat) : [Nat] = Array.tabulate<Nat>(n, func(i) = unit * i);
-  transient let pt_syncSuccessDuration = pt.addGauge("canister_sync_success_duration", "", #both, logarithmic(10, 2, 1), false);
-  transient let pt_syncFailureDuration = pt.addGauge("canister_sync_failure_duration", "", #both, logarithmic(10, 2, 1), false);
-  transient let pt_changesPerSync = pt.addGauge("canister_changes_per_sync", "", #both, linear(10, 2), false);
-  transient let pt_openCalls = pt.addGauge("trigger_open_calls", "", #both, logarithmic(10, 2, 1), false);
-  transient let pt_backlog = pt.addGauge("trigger_backlog", "", #both, logarithmic(10, 2, 1), false);
-  transient let pt_spawnedCalls = pt.addGauge("trigger_spawned_calls", "", #both, logarithmic(10, 2, 1), false);
+  let pt_syncSuccessDuration = pt.newGauge("canister_sync_success_duration", [], logarithmic(10, 2, 1));
+  let pt_syncFailureDuration = pt.newGauge("canister_sync_failure_duration", [], logarithmic(10, 2, 1));
+  let pt_changesPerSync = pt.newGauge("canister_changes_per_sync", [], linear(10, 2));
+  let pt_openCalls = pt.newGauge("trigger_open_calls", [], logarithmic(10, 2, 1));
+  let pt_backlog = pt.newGauge("trigger_backlog", [], logarithmic(10, 2, 1));
+  let pt_spawnedCalls = pt.newGauge("trigger_spawned_calls", [], logarithmic(10, 2, 1));
   // counters
-  transient let pt_triggers = pt.addCounter("triggers_total", "", false);
-  transient let pt_syncAttempts = pt.addCounter("sync_attempts_total", "", false);
-  transient let pt_metadataUpdates = pt.addCounter("metadata_update_total", "", true);
-  transient let pt_unauthorizedMetadataUpdates = pt.addCounter("unauthorized_metadata_update_total", "", true);
-  transient let pt_trigger_interval = pt.addCounter("trigger_interval", "", false);
-  // pull values constants
-  ignore pt.addPullValue("canisters_synced_per_minute", "", func() = canisters_num_to_sync);
-  // pull values variables
-  ignore pt.addPullValue("uptime_seconds", "", uptime);
-  ignore pt.addPullValue("traps_detected", "", func() = trapsDetected);
-  ignore pt.addPullValue("backlog_size", "", func() = Queue.size(backlog));
-  ignore pt.addPullValue("open_calls", "", func() = open_calls);
+  let pt_triggers = pt.newCounter("triggers_total", []);
+  let pt_syncAttempts = pt.newCounter("sync_attempts_total", []);
+  let pt_metadataUpdates = pt.newCounter("metadata_update_total", []);
+  let pt_unauthorizedMetadataUpdates = pt.newCounter("unauthorized_metadata_update_total", []);
+  let pt_trigger_interval = pt.newGauge("trigger_interval", [], []);
+  // heatmaps
+  let changesAmountDistribution = pt.newHeatmap("changes_amount_distribution", []);
 
-  tracker.registerMetrics(pt);
-  storage.registerMetrics(pt);
-  Task.registerMetrics(pt, allCanistersTask);
+  let storage : Storage.Storage = Storage.empty(changesAmountDistribution);
+
+  allCanistersTaskDataSource.setSize(storage.size());
+  transient let allCanistersTask : Task.Task = Task.newTask(allCanistersTaskData.1, allCanistersTaskDataSource);
+
+  // pull values
+  renderer.addValue(
+    [
+      PT.newValue("canisters_synced_per_minute", [], func() = canisters_num_to_sync),
+      PT.newValue("uptime_seconds", [], uptime),
+      PT.newValue("traps_detected", [], func() = trapsDetected),
+      PT.newValue("backlog_size", [], func() = Queue.size(backlog)),
+      PT.newValue("open_calls", [], func() = open_calls),
+    ].bundle([])
+  );
+
+  tracker.registerMetrics(renderer);
+  storage.registerMetrics(renderer);
+  Task.registerMetrics(allCanistersTask, pt, renderer);
   for (task in Map.values(tasks)) {
-    Task.registerMetrics(pt, task);
+    Task.registerMetrics(task, pt, renderer);
   };
-
-  var ptData : PT.StableData = null;
-  pt.unshare(ptData);
 
   public query func tracked_canisters_total() : async Nat = async storage.size();
 
   public query func tracked_canisters(limit : Nat, skip : Nat) : async [Principal] = async storage.trackedCanisters(limit, skip);
 
-  public query func get_tracking_stats() : async Tracker.TrackingStats = async tracker.getTrackingStats();
+  public query func get_tracking_stats() : async HTracker.TrackingStats = async tracker.getTrackingStats();
 
   public query func last_round_details(taskAlias : ?Text) : async {
     completed_at : Nat64;
@@ -248,7 +255,7 @@ persistent actor class HistoryTracker() = self {
     var callsToSpawn = Int.abs(Int.max(0, canisters_num_to_sync : Int - open_calls));
     var spawnedCalls = 0;
 
-    let calls = Buffer.Buffer<Concurrent.Item>(callsToSpawn);
+    let calls = List.empty<Concurrent.Item>();
 
     // process backlog first
     let backlogItems = Queue.values(backlog) |> Iter.take(_, callsToSpawn);
@@ -261,7 +268,7 @@ persistent actor class HistoryTracker() = self {
           spawnedCalls += 1;
         },
       );
-      calls.add(call);
+      List.add(calls, call);
       callsToSpawn -= 1;
     };
 
@@ -302,7 +309,7 @@ persistent actor class HistoryTracker() = self {
             spawnedCalls += 1;
           },
         );
-        calls.add(call);
+        List.add(calls, call);
         callsToSpawn -= 1;
         if (callsToSpawn == 0) {
           break l;
@@ -311,7 +318,7 @@ persistent actor class HistoryTracker() = self {
     };
 
     await* Concurrent.make_calls(
-      Buffer.toArray(calls),
+      List.toArray(calls),
       func(i) { trapsDetected += 1 }, // trap_cb
     );
     pt_spawnedCalls.update(spawnedCalls);
@@ -328,8 +335,8 @@ persistent actor class HistoryTracker() = self {
       if (t.dataSource.ctr() == 0) {
         t.lastRoundCompletedAt := trigger_start_time;
         t.lastRoundDuration := trigger_start_time - t.roundStart;
-        switch (t.metrics.roundDurationGauge) {
-          case (?g) g.update(t.lastRoundDuration |> Nat64.toNat(_));
+        switch (t.metrics) {
+          case (?{ roundDurationGauge }) roundDurationGauge.update(t.lastRoundDuration |> Nat64.toNat(_));
           case (_) {};
         };
       };
@@ -340,7 +347,7 @@ persistent actor class HistoryTracker() = self {
     #seconds 60,
     func() : async () { await* trigger_sync() },
   );
-  pt_trigger_interval.set(60);
+  pt_trigger_interval.update(60);
 
   // ADMIN API
   public func startTriggerTimer(intervalSeconds : Nat) : async () {
@@ -355,7 +362,7 @@ persistent actor class HistoryTracker() = self {
       #seconds intervalSeconds,
       func() : async () { await* trigger_sync() },
     );
-    pt_trigger_interval.set(intervalSeconds);
+    pt_trigger_interval.update(intervalSeconds);
   };
 
   public func stopTriggerTimer() : async () {
@@ -366,14 +373,14 @@ persistent actor class HistoryTracker() = self {
       };
       case (_) {};
     };
-    pt_trigger_interval.set(0);
+    pt_trigger_interval.update(0);
   };
 
-  public func setNumToSync(n : Nat) {
+  public func setNumToSync(n : Nat) : async () {
     canisters_num_to_sync := n;
   };
 
-  public func setRoundsInterval(taskAlias : ?Text, n_ : Nat) {
+  public func setRoundsInterval(taskAlias : ?Text, n_ : Nat) : async () {
     let n = Nat64.fromNat(n_);
     switch (taskAlias) {
       case (?"all_canisters" or null) allCanistersTask.roundsInterval := n;
@@ -404,14 +411,14 @@ persistent actor class HistoryTracker() = self {
       RoundRobin.RoundRobinBuffer(null),
     );
     tasks := Map.add(tasks, Text.compare, taskAlias, task);
-    Task.registerMetrics(pt, task);
+    Task.registerMetrics(task, pt, renderer);
   };
 
   public func deleteTask(taskAlias : Text) : async () {
     let ?task = Map.get(tasks, Text.compare, taskAlias) else throw Error.reject("Task with provided alias not found");
     let (upd, _) = Map.delete<Text, Task.BufferTask>(tasks, Text.compare, taskAlias);
     tasks := upd;
-    Task.deregisterMetrics(pt, task);
+    Task.deregisterMetrics(task, renderer);
   };
 
   public func trackMany(taskAlias : ?Text, canister_ids : [Principal]) : async [Result.Result<(), History.TrackError>] {
@@ -435,8 +442,8 @@ persistent actor class HistoryTracker() = self {
       let len = canister_ids.size();
       if (len > 100) throw Error.reject("Not more than 100 canister ids allowed in input.");
 
-      let results = Array.init<Result.Result<(), History.TrackError>>(len, #ok());
-      let calls = Buffer.Buffer<(Nat, async Result.Result<(), History.TrackError>)>(len);
+      let results = VarArray.repeat<Result.Result<(), History.TrackError>>(#ok(), len);
+      let calls = List.empty<(Nat, async Result.Result<(), History.TrackError>)>();
 
       label L for (i in canister_ids.keys()) {
         let id = canister_ids[i];
@@ -445,13 +452,13 @@ persistent actor class HistoryTracker() = self {
           continue L;
         };
         try {
-          calls.add(i, syncCall(id));
+          List.add(calls, (i, syncCall(id)));
         } catch (_) {
           results[i] := #err(#Busy({ message = "Cannot schedule self-call" }));
         };
       };
 
-      for ((i, c) in calls.vals()) {
+      for ((i, c) in List.values(calls)) {
         results[i] := try {
           await c;
         } catch (e) {
@@ -459,14 +466,14 @@ persistent actor class HistoryTracker() = self {
         };
       };
 
-      Array.freeze(results);
+      Array.fromVarArray(results);
     };
 
     switch (taskAlias) {
       case (null) await* trackInMainTask_(canister_ids);
       case (?ta) {
         let ?task = Map.get(tasks, Text.compare, ta) else throw Error.reject("Task with provided alias not found");
-        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.thaw<Result.Result<(), History.TrackError>>(_);
+        let trackResult = (await* trackInMainTask_(canister_ids)) |> Array.toVarArray<Result.Result<(), History.TrackError>>(_);
         for (i in trackResult.keys()) {
           switch (trackResult[i]) {
             case (#ok or #err(#AlreadyTracked _)) {
@@ -481,28 +488,23 @@ persistent actor class HistoryTracker() = self {
             case (_) {};
           };
         };
-        Array.freeze(trackResult);
+        Array.fromVarArray(trackResult);
       };
     };
   };
 
   system func preupgrade() {
-    storageDataV2 := storage.share();
     allCanistersTaskData := (allCanistersTaskDataSource.share(), allCanistersTask);
     tasksData := Map.map<Text, Task.BufferTask, (RoundRobin.RoundRobinBufferData<Nat>, Task.TaskState)>(
       tasks,
       func((_, t)) = (t.dataSource.share(), t),
     );
     trackerData := tracker.share();
-    ptData := pt.share();
-  };
 
-  public query func http_request(req : Http.Request) : async Http.Response {
-    let ?path = Text.split(req.url, #char '?').next() else return Http.render400();
-    let labels = "canister=\"" # PT.shortName(self) # "\"";
-    switch (req.method, path) {
-      case ("GET", "/metrics") Http.renderPlainText(pt.renderExposition(labels));
-      case (_) Http.render400();
+    Task.deregisterMetrics(allCanistersTask, renderer);
+    for (task in Map.values(tasks)) {
+      Task.deregisterMetrics(task, renderer);
     };
   };
+
 };

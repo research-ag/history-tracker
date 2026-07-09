@@ -1,7 +1,7 @@
-import Array "mo:base/Array";
-import Blob "mo:base/Blob";
-import Nat8 "mo:base/Nat8";
-import Principal "mo:base/Principal";
+import Array "mo:core/Array";
+import Blob "mo:core/Blob";
+import Nat8 "mo:core/Nat8";
+import Principal "mo:core/Principal";
 
 /// Functions to convert principal to fixed-length blob (with size 30) and back.
 module {

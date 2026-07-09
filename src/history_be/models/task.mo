@@ -1,6 +1,7 @@
-import Nat64 "mo:base/Nat64";
+import Nat64 "mo:core/Nat64";
 
 import PT "mo:promtracker";
+import { Gauge; Tracker } "mo:promtracker";
 
 import RoundRobin "../utils/round_robin";
 
@@ -21,8 +22,9 @@ module Task {
     var roundStart : Nat64;
     var lastRoundCompletedAt : Nat64;
     var lastRoundDuration : Nat64;
-    metrics : {
-      var roundDurationGauge : ?PT.GaugeValue;
+    var metrics : ?{
+      pullValuesRef : Nat;
+      roundDurationGauge : Gauge.Gauge;
     };
   };
   public func newTask(state : TaskState, dataSource : RoundRobin.RoundRobinSource<Nat>) : Task = {
@@ -32,9 +34,7 @@ module Task {
     var roundStart = state.roundStart;
     var lastRoundCompletedAt = state.lastRoundCompletedAt;
     var lastRoundDuration = state.lastRoundDuration;
-    metrics = {
-      var roundDurationGauge = null;
-    };
+    var metrics = null;
   };
 
   // sub-interface
@@ -45,8 +45,9 @@ module Task {
     var roundStart : Nat64;
     var lastRoundCompletedAt : Nat64;
     var lastRoundDuration : Nat64;
-    metrics : {
-      var roundDurationGauge : ?PT.GaugeValue;
+    var metrics : ?{
+      pullValuesRef : Nat;
+      roundDurationGauge : Gauge.Gauge;
     };
   };
 
@@ -57,33 +58,35 @@ module Task {
     var roundStart = state.roundStart;
     var lastRoundCompletedAt = state.lastRoundCompletedAt;
     var lastRoundDuration = state.lastRoundDuration;
-    metrics = {
-      var roundDurationGauge = null;
+    var metrics = null;
+  };
+
+  public func registerMetrics(task : Task.Task, pt : Tracker.Tracker, renderer : PT.Renderer) {
+    let pullValuesRef = renderer.addValueRef(
+      [
+        PT.newValue("tracked_canisters_total", [], func() = task.dataSource.size()),
+        PT.newValue("sync_pos", [], func() = task.dataSource.ctr()),
+        PT.newValue("round", [], func() = task.dataSource.round()),
+        PT.newValue("round_start", [], func() = task.roundStart |> Nat64.toNat(_)),
+        PT.newValue("rounds_interval", [], func() = task.roundsInterval |> Nat64.toNat(_)),
+        PT.newValue("last_round_completed_at", [], func() = task.lastRoundCompletedAt |> Nat64.toNat(_)),
+        PT.newValue("last_round_duration", [], func() = task.lastRoundDuration |> Nat64.toNat(_)),
+      ].bundle([("task", task.alias)])
+    );
+    let roundDurationGauge = pt.newGauge("round_duration", [("task", task.alias)], []);
+
+    task.metrics := ?{ pullValuesRef; roundDurationGauge };
+  };
+
+  public func deregisterMetrics(task : Task.Task, renderer : PT.Renderer) {
+    switch (task.metrics) {
+      case (?{ pullValuesRef; roundDurationGauge }) {
+        renderer.removeValue(pullValuesRef);
+        roundDurationGauge.unregister();
+        task.metrics := null;
+      };
+      case (_) {};
     };
-  };
-
-  public func registerMetrics(pt : PT.PromTracker, task : Task.Task) {
-    let lbl = "task=\"" # task.alias # "\"";
-    ignore pt.addPullValue("tracked_canisters_total", lbl, func() = task.dataSource.size());
-    ignore pt.addPullValue("sync_pos", lbl, func() = task.dataSource.ctr());
-    ignore pt.addPullValue("round", lbl, func() = task.dataSource.round());
-    ignore pt.addPullValue("round_start", lbl, func() = task.roundStart |> Nat64.toNat(_));
-    ignore pt.addPullValue("rounds_interval", lbl, func() = task.roundsInterval |> Nat64.toNat(_));
-    ignore pt.addPullValue("last_round_completed_at", lbl, func() = task.lastRoundCompletedAt |> Nat64.toNat(_));
-    ignore pt.addPullValue("last_round_duration", lbl, func() = task.lastRoundDuration |> Nat64.toNat(_));
-    task.metrics.roundDurationGauge := ?pt.addGauge("round_duration", lbl, #both, [0], false);
-  };
-
-  public func deregisterMetrics(pt : PT.PromTracker, task : Task.Task) {
-    let lbl = "task=\"" # task.alias # "\"";
-    pt.removeValue("tracked_canisters_total", lbl);
-    pt.removeValue("sync_pos", lbl);
-    pt.removeValue("round", lbl);
-    pt.removeValue("round_start", lbl);
-    pt.removeValue("rounds_interval", lbl);
-    pt.removeValue("last_round_completed_at", lbl);
-    pt.removeValue("last_round_duration", lbl);
-    pt.removeValue("round_duration", lbl);
   };
 
 };
