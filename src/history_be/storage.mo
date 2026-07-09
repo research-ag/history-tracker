@@ -222,46 +222,14 @@ module {
   };
 
   public func registerMetrics(self : Storage, renderer : PT.Renderer) {
-
-    func getEnumerationPagesAllocated(data : Enumeration.Enumeration) : Nat {
-      Nat64.toNat(Region.size(data.nodes_region) + Region.size(data.leaves_region));
-    };
-
+    renderer.addValue(PT.bundle([self.storageMap.toValue()], [("trie", "storageMap")]));
+    renderer.addValue(PT.bundle([self.principalsSet.toValue()], [("trie", "principalsSet")]));
+    renderer.addValue(PT.bundle([self.hashesSet.toValue()], [("trie", "hashesSet")]));
     renderer.addValue(
       [
         PT.newValue("stable_records_total", [], func() = LogLists.totalSize(self.changes)),
         PT.newValue("stable_pages_allocated", [], func() = Nat64.toNat(Region.size(self.changes.data) + Region.size(self.changes.indexTable))),
       ].bundle([("structure", "changes_lists")])
-    );
-
-    renderer.addValue(
-      [
-        PT.newValue("stable_records_total", [], func() = self.storageMap.size()),
-        PT.newValue("stable_pages_allocated", [], func() = getEnumerationPagesAllocated(self.storageMap)),
-        PT.newValue("stable_map_byte_size", [], func() = self.storageMap.memoryStats().byte_size),
-        PT.newValue("stable_map_leaf_count", [], func() = self.storageMap.memoryStats().used_leaf_count),
-        PT.newValue("stable_map_node_count", [], func() = self.storageMap.memoryStats().used_node_count),
-      ].bundle([("structure", "storage_map")])
-    );
-
-    renderer.addValue(
-      [
-        PT.newValue("stable_records_total", [], func() = self.principalsSet.size()),
-        PT.newValue("stable_pages_allocated", [], func() = getEnumerationPagesAllocated(self.principalsSet)),
-        PT.newValue("stable_map_byte_size", [], func() = self.principalsSet.memoryStats().byte_size),
-        PT.newValue("stable_map_leaf_count", [], func() = self.principalsSet.memoryStats().used_leaf_count),
-        PT.newValue("stable_map_node_count", [], func() = self.principalsSet.memoryStats().used_node_count),
-      ].bundle([("structure", "principals_set")])
-    );
-
-    renderer.addValue(
-      [
-        PT.newValue("stable_records_total", [], func() = self.hashesSet.size()),
-        PT.newValue("stable_pages_allocated", [], func() = getEnumerationPagesAllocated(self.hashesSet)),
-        PT.newValue("stable_map_byte_size", [], func() = self.hashesSet.memoryStats().byte_size),
-        PT.newValue("stable_map_leaf_count", [], func() = self.hashesSet.memoryStats().used_leaf_count),
-        PT.newValue("stable_map_node_count", [], func() = self.hashesSet.memoryStats().used_node_count),
-      ].bundle([("structure", "hashes_set")])
     );
   };
 
