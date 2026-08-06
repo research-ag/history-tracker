@@ -29,7 +29,7 @@ import Metadata "history/metadata";
 import Concurrent "history/info/concurrent_calls";
 
 import Storage "./storage";
-import HTracker "./tracker";
+import StatsTracker "./stats_tracker";
 
 persistent actor class HistoryTracker() = self {
 
@@ -69,13 +69,12 @@ persistent actor class HistoryTracker() = self {
     func((_, td)) = Task.newBufferTask(td.1, RoundRobin.RoundRobinBuffer<Nat>(?td.0)),
   );
 
-  var trackerData : HTracker.StableDataV1 = HTracker.defaultStableDataV1();
-  transient let tracker : HTracker.Tracker = HTracker.Tracker(trackerData);
+  let statsTracker : StatsTracker.StatsTracker = StatsTracker.new();
 
   func insertCanister(canisterId : Principal, history : History.History) : Nat {
     let id = storage.insertCanister(canisterId, history);
     allCanistersTaskDataSource.setSize(storage.size());
-    tracker.inc();
+    statsTracker.inc();
     id;
   };
 
@@ -133,7 +132,7 @@ persistent actor class HistoryTracker() = self {
     ].bundle([])
   );
 
-  tracker.registerMetrics(renderer);
+  statsTracker.registerMetrics(renderer);
   storage.registerMetrics(renderer);
   Task.registerMetrics(allCanistersTask, pt, renderer);
   for (task in Map.values(tasks)) {
@@ -144,7 +143,7 @@ persistent actor class HistoryTracker() = self {
 
   public query func tracked_canisters(limit : Nat, skip : Nat) : async [Principal] = async storage.trackedCanisters(limit, skip);
 
-  public query func get_tracking_stats() : async HTracker.TrackingStats = async tracker.getTrackingStats();
+  public query func get_tracking_stats() : async StatsTracker.TrackingStats = async statsTracker.getTrackingStats();
 
   public query func last_round_details(taskAlias : ?Text) : async {
     completed_at : Nat64;
@@ -499,8 +498,6 @@ persistent actor class HistoryTracker() = self {
       tasks,
       func((_, t)) = (t.dataSource.share(), t),
     );
-    trackerData := tracker.share();
-
     Task.deregisterMetrics(allCanistersTask, renderer);
     for (task in Map.values(tasks)) {
       Task.deregisterMetrics(task, renderer);
