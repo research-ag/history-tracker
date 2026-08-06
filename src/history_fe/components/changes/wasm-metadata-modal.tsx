@@ -8,14 +8,14 @@ import {
   Option,
   ListSubheader,
 } from "@mui/joy";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 
-import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
+import { WasmMetadata } from "@bindings/metadata_directory";
 import WasmMetadataView from "@fe/components/wasm-metadata-view";
 import { useFindWasmMetadata } from "@fe/integration";
 
 interface WasmMetadataModalProps {
-  moduleHash: Uint8Array | number[] | null;
+  moduleHash: Uint8Array | null;
   metadataMap: Record<string, Array<Principal>>;
   isOpen: boolean;
   onClose: () => void;

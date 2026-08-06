@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "react-query";
 import { enqueueSnackbar, useSnackbar } from "notistack";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import {
   ActorSubclass,
   Actor,
@@ -8,20 +8,20 @@ import {
   Cbor as cbor,
   HashTree,
   Certificate,
-  LookupStatus,
+  LookupPathStatus,
   reconstruct,
-} from "@dfinity/agent";
-import { IDL } from "@dfinity/candid";
+} from "@icp-sdk/core/agent";
+import { safeGetCanisterEnv } from "@icp-sdk/core/agent/canister-env";
+import { IDL } from "@icp-sdk/core/candid";
 import { decodeFirst, TagDecoder } from "cborg";
 
-import { canisterId, createActor } from "@declarations/history_be";
-import { _SERVICE, Result_1 } from "@declarations/history_be/history_be.did";
+import { createActor, History_be, Result_1, TrackError } from "@bindings/history_be";
 import { BLACKHOLE_CANISTERS } from "@fe/constants/blackholeCanisters";
 import {
-  canisterId as metadataDirectoryCanisterId,
   createActor as metadataDirectoryCreateActor,
-} from "@declarations/metadata_directory";
-import { _SERVICE as MD_SERVICE, WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
+  Metadata_directory,
+  WasmMetadata,
+} from "@bindings/metadata_directory";
 
 import { _SERVICE as MANAGEMENT_SERVICE } from "./management_idl/did";
 import { idlFactory as managementIdlFactory } from "./management_idl/idl";
@@ -34,9 +34,10 @@ import {
   resolveTrackManyResult,
 } from "./utils";
 
-export const BACKEND_CANISTER_ID = canisterId;
+export const BACKEND_CANISTER_ID =
+  safeGetCanisterEnv()?.["PUBLIC_CANISTER_ID:history_be"] ?? "";
 export const METADATA_DIRECTORY_BACKEND_CANISTER_ID =
-  metadataDirectoryCanisterId;
+  safeGetCanisterEnv()?.["PUBLIC_CANISTER_ID:metadata_directory"] ?? "";
 export const MANAGEMENT_CANISTER_ID = "aaaaa-aa";
 
 const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
@@ -52,22 +53,22 @@ const memoize = <R>(): ((fn: () => R, deps: any[]) => R) => {
   };
 };
 
-const getBackendFromCache = memoize<ActorSubclass<_SERVICE>>();
+const getBackendFromCache = memoize<History_be>();
 export const useHistoryBackend = () => {
   const { httpAgent, uniqueKey } = useHttpAgent();
   const backend = getBackendFromCache(
-    () => createActor(canisterId, { agent: httpAgent }),
+    () => createActor(BACKEND_CANISTER_ID, { agent: httpAgent }),
     [uniqueKey]
   );
   return { backend };
 };
 
-const getMetadataDirectoryFromCache = memoize<ActorSubclass<MD_SERVICE>>();
+const getMetadataDirectoryFromCache = memoize<Metadata_directory>();
 export const useMetadataDirectory = () => {
   const { httpAgent, uniqueKey } = useHttpAgent();
   const metadataDirectory = getMetadataDirectoryFromCache(
     () =>
-      metadataDirectoryCreateActor(metadataDirectoryCanisterId, {
+      metadataDirectoryCreateActor(METADATA_DIRECTORY_BACKEND_CANISTER_ID, {
         agent: httpAgent,
       }),
     [uniqueKey]
@@ -97,6 +98,7 @@ export const useHttpAgent = () => {
     () =>
       HttpAgent.createSync({
         identity,
+        rootKey: safeGetCanisterEnv()?.IC_ROOT_KEY,
         verifyQuerySignatures: false,
       }),
     [uniqueKey]
@@ -147,8 +149,8 @@ export const useTrackMany = () => {
   return useMutation(
     (canisterIds: Array<Principal>) =>
       backend
-        .trackMany([], canisterIds)
-        .then((res: Result_1[]) => resolveTrackManyResult<null, { [x: string]: { message: string } }>(res, canisterIds)),
+        .trackMany(null, canisterIds)
+        .then((res: Result_1[]) => resolveTrackManyResult<null, TrackError>(res, canisterIds)),
     {
       onSuccess: (data: Array<
         { canisterId: string } & (
@@ -217,13 +219,17 @@ export const useGetTrackingStats = () => {
 export const useGetLastRoundDetails = () => {
   const { backend } = useHistoryBackend();
   const { enqueueSnackbar } = useSnackbar();
-  return useQuery(["last-round-details"], () => backend.last_round_details([]), {
-    onError: () => {
-      enqueueSnackbar("Failed to fetch the last round details", {
-        variant: "error",
-      });
-    },
-  });
+  return useQuery(
+    ["last-round-details"],
+    () => backend.last_round_details(null),
+    {
+      onError: () => {
+        enqueueSnackbar("Failed to fetch the last round details", {
+          variant: "error",
+        });
+      },
+    }
+  );
 };
 
 export const useGetCanisterChanges = (canisterId: Principal) => {
@@ -285,9 +291,7 @@ export const useAssetsRootHash = (canisterId: Principal, enabled: boolean) => {
 
       const result = await assetCanister.certified_tree({});
 
-      const hashTree: HashTree = cbor.decode(
-        new Uint8Array(result.tree).buffer
-      );
+      const hashTree: HashTree = cbor.decode(new Uint8Array(result.tree));
 
       const reconstructed = await reconstruct(hashTree);
 
@@ -347,16 +351,16 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
   return useQuery(
     ["canister-module-hash", canisterId.toString()],
     async () => {
-      const moduleHashPath: ArrayBuffer[] = [
-        new TextEncoder().encode("canister").buffer as ArrayBuffer,
-        canisterId.toUint8Array().buffer as ArrayBuffer,
-        new TextEncoder().encode("module_hash").buffer as ArrayBuffer,
+      const moduleHashPath: Uint8Array[] = [
+        new TextEncoder().encode("canister"),
+        canisterId.toUint8Array(),
+        new TextEncoder().encode("module_hash"),
       ];
 
-      const controllersPath: ArrayBuffer[] = [
-        new TextEncoder().encode("canister").buffer as ArrayBuffer,
-        canisterId.toUint8Array().buffer as ArrayBuffer,
-        new TextEncoder().encode("controllers").buffer as ArrayBuffer,
+      const controllersPath: Uint8Array[] = [
+        new TextEncoder().encode("canister"),
+        canisterId.toUint8Array(),
+        new TextEncoder().encode("controllers"),
       ];
 
       const res = await httpAgent.readState(canisterId.toString(), {
@@ -365,8 +369,8 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
 
       const cert = await Certificate.create({
         certificate: res.certificate,
-        rootKey: await httpAgent.fetchRootKey(),
-        canisterId,
+        rootKey: safeGetCanisterEnv()?.IC_ROOT_KEY ?? new Uint8Array(),
+        principal: { canisterId },
       });
 
       const data: { moduleHash: string; controllers: Array<string> } = {
@@ -374,23 +378,23 @@ export const useReadState = (canisterId: Principal, enabled: boolean) => {
         controllers: [],
       };
 
-      const moduleHash = cert.lookup(moduleHashPath);
-      if (moduleHash.status === LookupStatus.Found) {
-        const hex = arrayBufferToHex(moduleHash.value as ArrayBuffer);
+      const moduleHash = cert.lookup_path(moduleHashPath);
+      if (moduleHash.status === LookupPathStatus.Found) {
+        const hex = arrayBufferToHex(moduleHash.value);
         data.moduleHash = hex;
-      } else if (moduleHash.status === LookupStatus.Absent) {
+      } else if (moduleHash.status === LookupPathStatus.Absent) {
         data.moduleHash = "Absent";
       } else {
         throw new Error(`module_hash LookupStatus: ${moduleHash.status}`);
       }
 
-      const controllers = cert.lookup(controllersPath);
-      if (controllers.status === LookupStatus.Found) {
+      const controllers = cert.lookup_path(controllersPath);
+      if (controllers.status === LookupPathStatus.Found) {
         const tags: TagDecoder[] = [];
         tags[55799] = (val: any) => val;
 
         const [decoded]: [Uint8Array[], Uint8Array] = decodeFirst(
-          new Uint8Array(controllers.value as ArrayBuffer),
+          controllers.value,
           { tags }
         );
 
@@ -463,8 +467,8 @@ export const useUpdateCanisterMetadata = () => {
       backend
         .update_metadata(
           canisterId,
-          typeof name !== "undefined" ? [name] : [],
-          typeof description !== "undefined" ? [description] : []
+          typeof name !== "undefined" ? name : null,
+          typeof description !== "undefined" ? description : null
         )
         .then(resolveResult),
     {
@@ -530,9 +534,7 @@ export const useFetchCanisterLogs = (
       return data.canister_log_records.map((record) => ({
         idx: Number(record.idx),
         timestamp_nanos: record.timestamp_nanos,
-        content: parseUint8ArrayToText(
-          (record.content as Uint8Array).buffer as ArrayBuffer
-        ),
+        content: parseUint8ArrayToText(record.content),
       }));
     },
     {
@@ -557,7 +559,7 @@ export const useGetWasmMetadata = () => {
   const { enqueueSnackbar } = useSnackbar();
   return useQuery(
     ["wasm-metadata", userPrincipal],
-    () => metadataDirectory.wasm_metadata([]),
+    () => metadataDirectory.wasm_metadata(null),
     {
       onError: () => {
         enqueueSnackbar("Failed to fetch the wasm metadata", {
@@ -569,7 +571,7 @@ export const useGetWasmMetadata = () => {
 };
 
 interface AddWasmMetadataPayload {
-  moduleHash: Uint8Array | number[];
+  moduleHash: Uint8Array;
   description?: string;
   buildInstructions?: string;
 }
@@ -585,9 +587,8 @@ export const useAddWasmMetadata = () => {
       metadataDirectory
         .add_wasm_metadata({
           module_hash: moduleHash,
-          description: typeof description !== "undefined" ? [description] : [],
-          build_instructions:
-            typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+          description,
+          build_instructions: buildInstructions,
         })
         .then(resolveResult),
     {
@@ -607,7 +608,7 @@ export const useAddWasmMetadata = () => {
 };
 
 interface UpdateWasmMetadataPayload {
-  moduleHash: Uint8Array | number[];
+  moduleHash: Uint8Array;
   description?: string;
   buildInstructions?: string;
 }
@@ -627,9 +628,8 @@ export const useUpdateWasmMetadata = () => {
       metadataDirectory
         .update_wasm_metadata({
           module_hash: moduleHash,
-          description: typeof description !== "undefined" ? [description] : [],
-          build_instructions:
-            typeof buildInstructions !== "undefined" ? [buildInstructions] : [],
+          description,
+          build_instructions: buildInstructions,
         })
         .then(resolveResult),
     {
@@ -650,7 +650,7 @@ export const useUpdateWasmMetadata = () => {
 
 interface FindWasmMetadataPayload {
   principals: Array<Principal>;
-  moduleHash: Uint8Array | number[];
+  moduleHash: Uint8Array;
 }
 
 export const useFindWasmMetadata = (
@@ -680,7 +680,7 @@ export const useFindWasmMetadata = (
 
 interface AvailableMetadataPayload {
   principals: Array<Principal>;
-  moduleHashes: Array<Uint8Array | number[]>;
+  moduleHashes: Array<Uint8Array>;
 }
 
 export const useAvailableMetadata = ({
@@ -695,7 +695,7 @@ export const useAvailableMetadata = ({
       principals.map((x) => x.toText()).join(","),
       moduleHashes.map((x) => x.join(",")).join(","),
     ],
-    () : Promise<Array<[Principal, Uint8Array | number[], bigint]>>  => metadataDirectory.available_metadata(principals, moduleHashes),
+    () : Promise<Array<[Principal, Uint8Array, bigint]>>  => metadataDirectory.available_metadata(principals, moduleHashes),
     {
       onError: () => {
         enqueueSnackbar("Failed to get the available metadata", {

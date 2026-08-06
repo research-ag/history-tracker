@@ -2,7 +2,7 @@ import { format } from "date-fns";
 import { Box, Divider, Typography, useTheme } from "@mui/joy";
 import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
-import { CanisterChangesResponse } from "@declarations/history_be/history_be.did";
+import { CanisterChangesResponse } from "@bindings/history_be";
 import { SxProps } from "@mui/joy/styles/types";
 
 interface HistoryInfoLineProps {

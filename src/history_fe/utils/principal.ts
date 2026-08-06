@@ -1,4 +1,4 @@
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 
 export const validatePrincipals = (value: string) => {
   const principalsText = value.split("\n").filter((str) => !!str);

@@ -1,6 +1,6 @@
 import { Box } from "@mui/joy";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { ExtendedChange } from "@bindings/history_be";
 
 import ItemWithDetails from "./item-with-details";
 
@@ -9,7 +9,7 @@ interface OriginCellProps {
 }
 
 const OriginCell = ({ change }: OriginCellProps) => {
-  if (change.origin[0] && "from_user" in change.origin[0])
+  if (change.origin?.__kind__ === "from_user")
     return (
       <ItemWithDetails
         title="From user"
@@ -23,12 +23,12 @@ const OriginCell = ({ change }: OriginCellProps) => {
             >
               Principal:
             </Box>{" "}
-            {change.origin[0].from_user.user_id.toString()}
+            {change.origin.from_user.user_id.toString()}
           </Box>
         }
       />
     );
-  if (change.origin[0] && "from_canister" in change.origin[0])
+  if (change.origin?.__kind__ === "from_canister")
     return (
       <ItemWithDetails
         title="From canister"
@@ -43,7 +43,7 @@ const OriginCell = ({ change }: OriginCellProps) => {
               >
                 Canister ID:
               </Box>{" "}
-              {change.origin[0].from_canister.canister_id.toString()}
+              {change.origin.from_canister.canister_id.toString()}
             </Box>
             <Box sx={{ overflowWrap: "break-word" }}>
               <Box
@@ -54,8 +54,9 @@ const OriginCell = ({ change }: OriginCellProps) => {
               >
                 Canister version:
               </Box>{" "}
-              {change.origin[0].from_canister.canister_version.length
-                ? Number(change.origin[0].from_canister.canister_version[0])
+              {typeof change.origin.from_canister.canister_version !==
+              "undefined"
+                ? Number(change.origin.from_canister.canister_version)
                 : "N/A"}
             </Box>
           </Box>

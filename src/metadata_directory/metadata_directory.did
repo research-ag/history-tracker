@@ -1,0 +1,45 @@
+type _anon_class_13_1 = 
+ service {
+   add_wasm_metadata: (payload: WasmMetadataChangePayload) -> (Result_1);
+   available_metadata: (principals: vec principal, module_hashes:
+    vec blob) -> (vec record {
+                        principal;
+                        blob;
+                        nat;
+                      }) query;
+   find_wasm_metadata: (module_hash: blob, principals: vec principal) ->
+    (vec record {
+           principal;
+           WasmMetadata;
+         }) query;
+   update_wasm_metadata: (payload: WasmMetadataChangePayload) -> (Result);
+   wasm_metadata: (p: opt principal) -> (vec WasmMetadata) query;
+ };
+type WasmMetadataChangePayload = 
+ record {
+   build_instructions: opt text;
+   description: opt text;
+   module_hash: blob;
+ };
+type WasmMetadata = 
+ record {
+   build_instructions: text;
+   created_timestamp: nat64;
+   description: text;
+   latest_update_timestamp: nat64;
+   module_hash: blob;
+ };
+type UpdateWasmMetadata = variant {NoWasmMetadata: record {message: text;};};
+type Result_1 = 
+ variant {
+   err: AddWasmMetadata;
+   ok;
+ };
+type Result = 
+ variant {
+   err: UpdateWasmMetadata;
+   ok;
+ };
+type AddWasmMetadata = variant {
+                         ModuleHashAlreadyExists: record {message: text;};};
+service : () -> _anon_class_13_1

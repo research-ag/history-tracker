@@ -1,7 +1,7 @@
 import { Box, Button } from "@mui/joy";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { CanisterInstallMode, ExtendedChange } from "@bindings/history_be";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 import { getSHA256Hash } from "@fe/utils/hash";
 
@@ -10,7 +10,7 @@ import ItemWithDetails from "./item-with-details";
 interface ActionCellProps {
   change: ExtendedChange;
   metadataMap: Record<string, Array<Principal>>;
-  onViewMetadata: (moduleHash: Uint8Array | number[]) => void;
+  onViewMetadata: (moduleHash: Uint8Array) => void;
 }
 
 const ActionCell = ({
@@ -18,7 +18,7 @@ const ActionCell = ({
   metadataMap,
   onViewMetadata,
 }: ActionCellProps) => {
-  if (change.details[0] && "creation" in change.details[0])
+  if (change.details?.__kind__ === "creation")
     return (
       <ItemWithDetails
         title="Creation"
@@ -26,7 +26,7 @@ const ActionCell = ({
           <Box sx={{ overflowWrap: "break-word" }}>
             <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
             <Box component="ul">
-              {change.details[0].creation.controllers.map((c, i) => (
+              {change.details.creation.controllers.map((c, i) => (
                 <Box key={i} component="li">
                   {c.toText()}
                 </Box>
@@ -36,12 +36,15 @@ const ActionCell = ({
         }
       />
     );
-  if (change.details[0] && "code_deployment" in change.details[0]) {
-    const codeDeploymentRecord = change.details[0].code_deployment;
+  if (change.details?.__kind__ === "code_deployment") {
+    const codeDeploymentRecord = change.details.code_deployment;
     const getMode = () => {
-      if ("reinstall" in codeDeploymentRecord.mode) return "Reinstall";
-      if ("upgrade" in codeDeploymentRecord.mode) return "Upgrade";
-      if ("install" in codeDeploymentRecord.mode) return "Install";
+      if (codeDeploymentRecord.mode === CanisterInstallMode.reinstall)
+        return "Reinstall";
+      if (codeDeploymentRecord.mode === CanisterInstallMode.upgrade)
+        return "Upgrade";
+      if (codeDeploymentRecord.mode === CanisterInstallMode.install)
+        return "Install";
     };
     const moduleHash = getSHA256Hash(codeDeploymentRecord.module_hash);
     const principalsWithMetadata =
@@ -105,7 +108,7 @@ const ActionCell = ({
       />
     );
   }
-  if (change.details[0] && "controllers_change" in change.details[0])
+  if (change.details?.__kind__ === "controllers_change")
     return (
       <ItemWithDetails
         title="Controllers change"
@@ -113,7 +116,7 @@ const ActionCell = ({
           <Box sx={{ overflowWrap: "break-word" }}>
             <Box sx={{ fontWeight: 600 }}>Controllers:</Box>
             <Box component="ul">
-              {change.details[0].controllers_change.controllers.map((c, i) => (
+              {change.details.controllers_change.controllers.map((c, i) => (
                 <Box key={i} component="li">
                   {c.toText()}
                 </Box>
@@ -123,7 +126,7 @@ const ActionCell = ({
         }
       />
     );
-  if ("code_uninstall" in change.details) return "Code uninstall";
+  if (change.details?.__kind__ === "code_uninstall") return "Code uninstall";
 };
 
 export default ActionCell;

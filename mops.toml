@@ -10,3 +10,18 @@ test = "2.1.2"
 [toolchain]
 moc = "1.6.0"
 wasmtime = "42.0.0"
+
+[canisters.metadata_directory]
+main = "src/metadata_directory/main.mo"
+candid = "src/metadata_directory/metadata_directory.did"
+args = ["--enhanced-orthogonal-persistence"]
+
+[canisters.history_be]
+main = "src/history_be/main.mo"
+candid = "src/history_be/history_be.did"
+args = ["--enhanced-orthogonal-persistence", "--max-stable-pages", "131072"]
+
+[canisters.history_be_2]
+main = "src/history_be/main.mo"
+candid = "src/history_be/history_be.did"
+args = ["--enhanced-orthogonal-persistence", "--max-stable-pages", "131072"]

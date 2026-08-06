@@ -1,6 +1,6 @@
 import { Box, Typography } from "@mui/joy";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { ExtendedChange } from "@bindings/history_be";
 
 import {
   getNumberOfResets,

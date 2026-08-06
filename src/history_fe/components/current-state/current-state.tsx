@@ -1,5 +1,5 @@
 import { useParams } from "react-router-dom";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import { Box, LinearProgress } from "@mui/joy";
 
 import {

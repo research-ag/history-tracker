@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import { useNavigate } from "react-router-dom";
 import {
   Button,

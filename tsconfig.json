@@ -10,7 +10,7 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -18,8 +18,8 @@
     "types": ["vite/client", "node"],
     "baseUrl": "./",
     "paths": {
-      "@declarations": ["./declarations"],
-      "@declarations/*": ["./declarations/*"],
+      "@bindings": ["./src/history_fe/bindings"],
+      "@bindings/*": ["./src/history_fe/bindings/*"],
       "@fe": ["./src/history_fe"],
       "@fe/*": ["./src/history_fe/*"]
     }

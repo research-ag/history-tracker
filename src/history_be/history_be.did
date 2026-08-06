@@ -1,0 +1,141 @@
+type UpdateMetadata = variant {CanisterNotTracked: record {message: text;};};
+type TrackingStats = 
+ record {
+   new_24h: nat;
+   new_30d: nat;
+   new_7d: nat;
+ };
+type TrackError = 
+ variant {
+   AlreadyTracked: record {message: text;};
+   Busy: record {message: text;};
+   DoesNotExist: record {message: text;};
+   Unexpected: record {message: text;};
+ };
+type SnapshotRecord = 
+ record {
+   canister_version: nat64;
+   from_canister_id: opt principal;
+   snapshot_id: blob;
+   taken_at_timestamp: nat64;
+ };
+type SharedMetadata = 
+ record {
+   description: text;
+   latest_update_timestamp: nat64;
+   name: text;
+ };
+type Result_1 = 
+ variant {
+   err: TrackError;
+   ok;
+ };
+type Result = 
+ variant {
+   err: UpdateMetadata;
+   ok;
+ };
+type Response = 
+ record {
+   body: blob;
+   headers: vec record {
+                  text;
+                  text;
+                };
+   status_code: nat16;
+ };
+type Request = 
+ record {
+   body: blob;
+   headers: vec record {
+                  text;
+                  text;
+                };
+   method: text;
+   url: text;
+ };
+type HistoryTracker = 
+ service {
+   canister_changes: (canister_id: principal) ->
+    (opt CanisterChangesResponse) query;
+   createTask: (taskAlias: text) -> ();
+   deleteTask: (taskAlias: text) -> ();
+   get_tracking_stats: () -> (TrackingStats) query;
+   http_request: (req: Request) -> (Response) query;
+   is_canister_tracked: (canister_id: principal) -> (bool) query;
+   last_round_details: (taskAlias: opt text) ->
+    (record {
+       completed_at: nat64;
+       current_round: nat;
+       duration: nat64;
+     }) query;
+   listTasks: () -> (vec text) query;
+   metadata: (canister_id: principal) -> (opt SharedMetadata) query;
+   setNumToSync: (n: nat) -> ();
+   setRoundsInterval: (taskAlias: opt text, n: nat) -> ();
+   startTriggerTimer: (intervalSeconds: nat) -> ();
+   stopTriggerTimer: () -> ();
+   track: (canister_id: principal) -> (Result_1);
+   trackMany: (taskAlias: opt text, canister_ids: vec principal) ->
+    (vec Result_1);
+   tracked_canisters: (limit: nat, skip: nat) -> (vec principal) query;
+   tracked_canisters_total: () -> (nat) query;
+   update_metadata: (canister_id: principal, name: opt text, description:
+    opt text) -> (Result);
+ };
+type ExtendedChange = 
+ record {
+   canister_version: nat64;
+   change_index: nat;
+   details: opt CanisterChangeDetails;
+   origin: opt CanisterChangeOrigin;
+   timestamp_nanos: nat64;
+ };
+type CodeDeploymentRecord = 
+ record {
+   mode: CanisterInstallMode;
+   module_hash: blob;
+ };
+type CanisterInstallMode = 
+ variant {
+   install;
+   reinstall;
+   upgrade;
+ };
+type CanisterChangesResponse = 
+ record {
+   changes: vec ExtendedChange;
+   sync_version: nat;
+   timestamp_nanos: nat64;
+   total_num_changes: nat64;
+ };
+type CanisterChangeOrigin = 
+ variant {
+   from_canister:
+    record {
+      canister_id: principal;
+      canister_version: opt nat64;
+    };
+   from_user: record {user_id: principal;};
+ };
+type CanisterChangeDetails = 
+ variant {
+   code_deployment: CodeDeploymentRecord;
+   code_uninstall;
+   controllers_change: record {controllers: vec principal;};
+   creation: record {controllers: vec principal;};
+   load_snapshot: SnapshotRecord;
+   rename_canister:
+    record {
+      canister_id: principal;
+      rename_to:
+       record {
+         canister_id: principal;
+         total_num_changes: nat64;
+         version: nat64;
+       };
+      requested_by: principal;
+      total_num_changes: nat64;
+    };
+ };
+service : () -> HistoryTracker

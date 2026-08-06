@@ -2,7 +2,7 @@ import { Box, FormControl, FormLabel, Typography } from "@mui/joy";
 import MDEditor from "@uiw/react-md-editor";
 import { format } from "date-fns";
 
-import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
+import { WasmMetadata } from "@bindings/metadata_directory";
 import { getSHA256Hash } from "@fe/utils/hash";
 
 interface WasmMetadataViewProps {

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQueryClient } from "react-query";
 import { format } from "date-fns";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import { Alert, Box, Divider, LinearProgress, Table, useTheme } from "@mui/joy";
 import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 
@@ -39,7 +39,7 @@ const Changes = () => {
   );
 
   const [moduleHashToViewMetadata, setModuleHashToViewMetadata] = useState<
-    (Uint8Array | number[]) | null
+    Uint8Array | null
   >(null);
 
   const {
@@ -92,7 +92,7 @@ const Changes = () => {
     }
 
     for (const change of [...data.changes].reverse()) {
-      if ("code_deployment" in change.details) {
+      if (change.details?.__kind__ === "code_deployment") {
         const { module_hash } = change.details.code_deployment;
         return getSHA256Hash(module_hash) !== actualModuleHash;
       }

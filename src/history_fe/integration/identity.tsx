@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from "react";
-import { AnonymousIdentity, Identity } from "@dfinity/agent";
+import { AnonymousIdentity, Identity } from "@icp-sdk/core/agent";
 
 interface IdentityContext {
   identity: Identity;

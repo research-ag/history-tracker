@@ -1,6 +1,6 @@
 import { Modal, ModalDialog, ModalClose, Typography } from "@mui/joy";
 
-import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
+import { WasmMetadata } from "@bindings/metadata_directory";
 import WasmMetadataView from "@fe/components/wasm-metadata-view";
 
 interface ViewWasmMetadataModalProps {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { format } from "date-fns";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import { Box, Button, LinearProgress, Typography, useTheme } from "@mui/joy";
 import { useMediaQuery } from "@mui/material"; // TODO: @mui/material should not be used. Temporary solution.
 

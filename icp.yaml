@@ -1,0 +1,29 @@
+canisters:
+  - name: metadata_directory
+    recipe:
+      type: "@dfinity/motoko@v5.0.0"
+
+  - name: history_be
+    recipe:
+      type: "@dfinity/motoko@v5.0.0"
+
+  - name: history_be_2
+    recipe:
+      type: "@dfinity/motoko@v5.0.0"
+
+  - name: history_fe
+    recipe:
+      type: "@dfinity/static-site@v0.3.3"
+      configuration:
+        dir: dist
+        build:
+          - npm install
+          - npm run build:frontend
+
+  - name: internet_identity
+    build:
+      steps:
+        - type: script
+          commands:
+            - curl -sSL -o "$ICP_WASM_OUTPUT_PATH.gz" https://github.com/dfinity/internet-identity/releases/latest/download/internet_identity_production.wasm.gz
+            - gzip -df "$ICP_WASM_OUTPUT_PATH.gz"

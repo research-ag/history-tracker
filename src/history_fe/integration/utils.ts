@@ -1,6 +1,6 @@
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 
-export const arrayBufferToHex = (buffer: ArrayBuffer): string => {
+export const arrayBufferToHex = (buffer: Uint8Array | ArrayBuffer): string => {
   const byteArray = new Uint8Array(buffer);
   const hexParts: string[] = [];
 
@@ -12,31 +12,35 @@ export const arrayBufferToHex = (buffer: ArrayBuffer): string => {
   return hexParts.join("");
 };
 
-export const parseUint8ArrayToText = (data: ArrayBuffer): string => {
+export const parseUint8ArrayToText = (data: Uint8Array | ArrayBuffer): string => {
   const decoder = new TextDecoder("utf-8");
   return decoder.decode(data);
 };
 
-export const resolveResult = <
-  R,
-  E extends { [x: string]: { message: string } }
->(
-  result: { ok: R } | { err: E }
-) => {
-  if ("err" in result) {
-    const key = Object.keys(result.err)[0];
-    const msg = result.err[key].message;
-    throw new Error(msg);
+const getVariantErrorMessage = (variant: {
+  __kind__: string;
+  [x: string]: unknown;
+}): string => {
+  const payload = (variant as Record<string, { message: string }>)[
+    variant.__kind__
+  ];
+  return payload.message;
+};
+
+export const resolveResult = <R, E extends { __kind__: string }>(
+  result: { __kind__: "ok"; ok: R } | { __kind__: "err"; err: E }
+): R => {
+  if (result.__kind__ === "err") {
+    throw new Error(getVariantErrorMessage(result.err));
   }
   return result.ok;
 };
 
 // Resolves trackMany result item
-export const resolveTrackManyResult = <
-  R,
-  E extends { [x: string]: { message: string } }
->(
-  resultItems: Array<{ ok: R } | { err: E }>,
+export const resolveTrackManyResult = <R, E extends { __kind__: string }>(
+  resultItems: Array<
+    { __kind__: "ok"; ok: R } | { __kind__: "err"; err: E }
+  >,
   canisterIds: Array<Principal>
 ): Array<
   { canisterId: string } & (
@@ -45,22 +49,23 @@ export const resolveTrackManyResult = <
   )
 > => {
   return resultItems.map((res, i) => {
-    if ("err" in res) {
-      const key = Object.keys(res.err)[0];
-      const msg = res.err[key].message;
+    if (res.__kind__ === "err") {
+      const payload = (
+        res.err as unknown as Record<string, { message: string }>
+      )[res.err.__kind__];
       return {
         canisterId: canisterIds[i].toText(),
         ok: false,
-        data: res.err[key],
+        data: payload,
       };
     }
     return { canisterId: canisterIds[i].toText(), ok: true, data: res.ok };
   });
 };
 
-export const resolveDataOrNullError = <T>(data: [] | [T]): T => {
-  if (data[0]) {
-    return data[0];
+export const resolveDataOrNullError = <T>(data: T | null): T => {
+  if (data !== null) {
+    return data;
   }
   throw new Error();
 };

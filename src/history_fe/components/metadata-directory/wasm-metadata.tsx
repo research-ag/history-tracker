@@ -17,7 +17,7 @@ import { useGetWasmMetadata } from "@fe/integration";
 import { getSHA256Hash } from "@fe/utils/hash";
 import { mapModuleHash } from "@fe/constants/knownHashes";
 import ItemWithDetails from "@fe/components/item-with-details";
-import { WasmMetadata } from "@declarations/metadata_directory/metadata_directory.did";
+import { WasmMetadata } from "@bindings/metadata_directory";
 
 import WasmMetadataModal from "./wasm-metadata-modal";
 import ViewWasmMetadataModal from "./view-wasm-metadata";

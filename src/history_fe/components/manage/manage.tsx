@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { Box, Divider, LinearProgress, Textarea } from "@mui/joy";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import { formatDistanceStrict } from "date-fns";
 import { format, toZonedTime } from "date-fns-tz";
 

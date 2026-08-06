@@ -1,11 +1,11 @@
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { ExtendedChange } from "@bindings/history_be";
 
 export const extractModuleHashes = (changes: Array<ExtendedChange>) => {
-  const moduleHashes: Array<Uint8Array | number[]> = [];
+  const moduleHashes: Array<Uint8Array> = [];
   for (const change of changes) {
-    if (change.details.length === 0) continue;
-    if ("code_deployment" in change.details[0]) {
-      const codeDeploymentRecord = change.details[0].code_deployment;
+    if (!change.details) continue;
+    if (change.details.__kind__ === "code_deployment") {
+      const codeDeploymentRecord = change.details.code_deployment;
       moduleHashes.push(codeDeploymentRecord.module_hash);
     }
   }

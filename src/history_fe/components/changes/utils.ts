@@ -1,6 +1,6 @@
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 
-import { ExtendedChange } from "@declarations/history_be/history_be.did";
+import { CanisterInstallMode, ExtendedChange } from "@bindings/history_be";
 
 export const addGaps = (
   changes: Array<ExtendedChange>
@@ -55,11 +55,11 @@ export const getNumberOfResets = (
   changes: Array<ExtendedChange> // sorted by ascending indexes
 ): NumberOfResetsResult => {
   const installs = changes.reduce<number>((acc, change) => {
-    if (change.details.length === 0) return acc;
-    if ("code_deployment" in change.details[0]) {
-      const { mode } = change.details[0].code_deployment;
-      if ("reinstall" in mode) return acc + 1;
-      if ("install" in mode) return acc + 1;
+    if (!change.details) return acc;
+    if (change.details.__kind__ === "code_deployment") {
+      const { mode } = change.details.code_deployment;
+      if (mode === CanisterInstallMode.reinstall) return acc + 1;
+      if (mode === CanisterInstallMode.install) return acc + 1;
     }
     return acc;
   }, 0);
@@ -83,11 +83,11 @@ export const getNumberOfResets = (
   let flag = false;
 
   for (let change of changes) {
-    if (change.details.length === 0) continue;
-    if ("code_deployment" in change.details[0]) {
-      const { mode } = change.details[0].code_deployment;
-      if ("reinstall" in mode) break;
-      if ("install" in mode) break;
+    if (!change.details) continue;
+    if (change.details.__kind__ === "code_deployment") {
+      const { mode } = change.details.code_deployment;
+      if (mode === CanisterInstallMode.reinstall) break;
+      if (mode === CanisterInstallMode.install) break;
       flag = true;
       break;
     }
@@ -152,9 +152,12 @@ export const getSummarySinceLastReset = (
   var changes: Array<ExtendedChange> = [...changes_];
 
   let baseIndex = changes.findLastIndex((change) => {
-    if (change.details[0] && "code_deployment" in change.details[0]) {
-      const { mode } = change.details[0].code_deployment;
-      return "reinstall" in mode || "install" in mode;
+    if (change.details?.__kind__ === "code_deployment") {
+      const { mode } = change.details.code_deployment;
+      return (
+        mode === CanisterInstallMode.reinstall ||
+        mode === CanisterInstallMode.install
+      );
     }
     return false;
   });
@@ -180,12 +183,12 @@ export const getHistoryControllers = (
 
   for (const change of changes) {
     let to_add: Array<Principal> = [];
-    if (change.details.length === 0) continue;
-    if ("creation" in change.details[0]) {
-      to_add = [...change.details[0].creation.controllers];
+    if (!change.details) continue;
+    if (change.details.__kind__ === "creation") {
+      to_add = [...change.details.creation.controllers];
     }
-    if ("controllers_change" in change.details[0]) {
-      to_add = [...change.details[0].controllers_change.controllers];
+    if (change.details.__kind__ === "controllers_change") {
+      to_add = [...change.details.controllers_change.controllers];
     }
     for (const p of to_add) {
       if (controllersMap[p.toText()]) continue;

@@ -5,7 +5,7 @@ import {
   Controller,
   useFormState,
 } from "react-hook-form";
-import { Principal } from "@dfinity/principal";
+import { Principal } from "@icp-sdk/core/principal";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z as zod } from "zod";
 import {
@@ -22,7 +22,7 @@ import {
 
 import { useUpdateCanisterMetadata } from "@fe/integration";
 import ErrorAlert from "@fe/components/error-alert";
-import { SharedMetadata } from "@declarations/history_be/history_be.did";
+import { SharedMetadata } from "@bindings/history_be";
 
 interface UpdateMetadataFormValues {
   name: string;
